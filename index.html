@@ -201,6 +201,12 @@ label.f.wide{grid-column:1/-1}
   table.items tfoot tr{border:0}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.dialog.wide{width:min(900px,100%)}
+.rv-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.rv{display:grid;grid-template-columns:auto 130px minmax(0,1fr) 84px 104px 124px;gap:8px;align-items:end;border:1px solid var(--line);border-radius:8px;padding:8px}
+.rv-on{display:flex;flex-direction:column;align-items:center;gap:4px;padding-bottom:8px}
+.rv-on input{width:20px;height:20px}
+@media (max-width:760px){.rv{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}.rv-on{grid-row:1/span 4}.rv .rv-d{grid-column:2/-1}}
 </style>
 </head>
 <body>
@@ -225,10 +231,10 @@ label.f.wide{grid-column:1/-1}
 </nav>
 <div id="layer"></div>
 <div id="toast" class="toast" hidden></div>
-<script src="config.js?v=2"></script>
+<script src="config.js?v=3"></script>
 <script>
 "use strict";
-const APP_VERSION="0.2.0";
+const APP_VERSION="0.3.0";
 /* ---------- Sabitler ---------- */
 const STAGES=[
   {k:"siparis",l:"Sipariş verildi",wait:"Taslak"},
@@ -574,6 +580,116 @@ async function photoUrl(a){
 }
 const linkOf=d=>/^https:\/\//.test(d.link||"")?d.link:"#";
 
+/* ---------- Belge okuma: metinden alan çıkarma (tamamı cihazda çalışır) ---------- */
+function parseNum(raw){
+  let s=String(raw).replace(/[^\d.,-]/g,"");
+  if(!/\d/.test(s))return NaN;
+  s=s.replace(/[.,]+$/,"");
+  const lc=s.lastIndexOf(","),ld=s.lastIndexOf(".");
+  if(lc>-1&&ld>-1){s=lc>ld?s.replace(/\./g,"").replace(",","."):s.replace(/,/g,"")}
+  else if(lc>-1||ld>-1){
+    const sep=lc>-1?",":".";const parts=s.split(sep);
+    if(parts.length>2||(parts[1].length===3&&parts[0].length<=3&&parts[0]!=="0"))s=parts.join("");
+    else s=parts[0]+"."+parts[1];
+  }
+  return Number(s);
+}
+const isDateTok=t=>/^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}$/.test(t);
+const isNumTok=t=>/^[€$£]?-?\d[\d.,]*[€$£%]?$/.test(t)&&!isDateTok(t);
+const isCodeTok=t=>/^(?=.*\d)[A-Za-z0-9][A-Za-z0-9\-\/._]{2,}$/.test(t)&&!isDateTok(t);
+const ORIGIN_RULES=[
+  ["CN",/\b(?:made\s+in\s+|prodotto\s+in\s+|fabriqu[ée]\s+en\s+)?(?:china|cina|chine|çin|p\.?\s?r\.?\s?c\.?)\b|\(CN\)/i],
+  ["IT",/\b(?:made\s+in\s+|prodotto\s+in\s+|fabriqu[ée]\s+en\s+)?(?:italy|italia|italie|italya)\b|\(IT\)/i],
+  ["TR",/\b(?:made\s+in\s+|prodotto\s+in\s+)?(?:turkey|t[uü]rkiye|turchia)\b|\(TR\)/i]
+];
+function findOrigin(text){
+  for(const [k,re] of ORIGIN_RULES){if(re.test(text))return k}
+  const m=/\b(?:orig(?:in|ine)?|mense|menşe)\b\.?\s*[:\-]?\s*(CN|IT|TR)\b/i.exec(text);
+  return m?m[1].toUpperCase():"";
+}
+function stripOrigin(text){
+  let s=text;
+  for(const [,re] of ORIGIN_RULES)s=s.replace(new RegExp(re.source,"gi")," ");
+  return s.replace(/\(\s*\)/g," ").replace(/\s+/g," ").trim();
+}
+/* Bir satırda adet x birim fiyat = tutar eşitliğini sağlayan üç sayı aranır. Fatura kalemi olmanın ölçütü budur. */
+function parseItemLine(line){
+  const toks=line.trim().split(/\s+/).filter(Boolean);
+  const nums=[];toks.forEach((t,i)=>{if(isNumTok(t)&&!/%$/.test(t)){const v=parseNum(t);if(isFinite(v))nums.push({i,v,t})}});
+  if(nums.length<3)return null;
+  let best=null;
+  for(let c=nums.length-1;c>=2&&!best;c--){
+    for(let b=c-1;b>=1&&!best;b--){
+      for(let a=b-1;a>=0;a--){
+        const q=nums[a].v,p=nums[b].v,t=nums[c].v;
+        if(q<=0||p<=0||t<=0)continue;
+        if(Math.abs(q*p-t)<=Math.max(0.011,t*0.0006)){best={a,b,c,q,p,t};if(Number.isInteger(q))break}
+      }
+    }
+  }
+  if(!best)return null;
+  const qi=nums[best.a].i;const head=toks.slice(0,qi);
+  let model="";let ci=head.findIndex(isCodeTok);
+  if(ci===-1&&head.length&&/^\d{3,}$/.test(head[0]))ci=0;
+  if(ci>-1){model=head[ci].replace(/[.,;:]+$/,"");head.splice(ci,1)}
+  const rest=head.filter(t=>!isNumTok(t)||/[A-Za-z]/.test(t)).join(" ");
+  const origin=findOrigin(line);
+  const desc=stripOrigin(rest).replace(/^[\-|.:;,\s]+|[\-|.:;,\s]+$/g,"");
+  if(!model&&desc.replace(/[^A-Za-zÀ-ÿĞğİıŞşÇçÖöÜü]/g,"").length<3)return null;
+  return {model,desc,qty:best.q,price:best.p,amount:best.t,origin};
+}
+function parseInvoice(text){
+  const lines=String(text).split(/\r?\n/).map(l=>l.replace(/[| ]/g," ").replace(/\s+/g," ").trim()).filter(Boolean);
+  const items=[];
+  for(const l of lines){const it=parseItemLine(l);if(it)items.push(it)}
+  const all=lines.join("\n");
+  let no="";
+  const pats=[/\b(?:fattura|invoice|proforma|facture|rechnung)\b[^\n]{0,40}?\b(?:n[°ºo.]?|nr\.?|no\.?|num(?:ero)?\.?|number|#)\s*[:.]?\s*([A-Z0-9][\w\-\/]*\d[\w\-\/]*)/i,
+    /(?:^|\n)\s*(?:n[°º.]|nr\.?|no\.|numero|number|doc(?:umento)?\.?\s*n[°º.]?)\s*[:.]?\s*([A-Z0-9][\w\-\/]*\d[\w\-\/]*)/i];
+  for(const p of pats){const m=p.exec(all);if(m){no=m[1];break}}
+  if(!no){const m=/\b(?:n[°º.]|nr\.?|no\.)\s*[:.]?\s*([A-Z0-9][\w\-\/]*\d[\w\-\/]*)/i.exec(all);if(m&&m[1].length>=4)no=m[1]}
+  let date="";const dm=/\b(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})\b/.exec(all);
+  if(dm){const d=+dm[1],mo=+dm[2];if(d>=1&&d<=31&&mo>=1&&mo<=12)date=dm[3]+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0")}
+  let currency="";if(/\bEUR\b|€|\beuro\b/i.test(all))currency="EUR";else if(/\bUSD\b|US\$|\$/.test(all))currency="USD";else if(/\bTRY\b|\bTL\b|₺/.test(all))currency="TRY";
+  let total=null;
+  for(const l of lines){
+    if(!/\b(?:tot(?:ale|al)?|toplam|amount\s+due|grand\s+total|importo\s+totale)\b/i.test(l))continue;
+    const vs=l.split(/\s+/).filter(isNumTok).map(parseNum).filter(v=>isFinite(v)&&v>0);
+    if(vs.length){const v=Math.max(...vs);if(total==null||v>total)total=v}
+  }
+  const sum=Math.round(items.reduce((s,i)=>s+i.amount,0)*100)/100;
+  return {no,date,currency,total,sum,items,lineCount:lines.length};
+}
+function parseLabel(text){
+  const all=String(text).replace(/[| ]/g," ");
+  const lines=all.split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
+  let model="";
+  const mm=/\b(?:art(?:icolo|icle|\.)?|mod(?:ello|el|\.)?|style|ref(?:erence|\.)?|cod(?:ice|e|\.)?|item|model)\b\.?\s*(?:n[°ºo.]?\s*)?[:#\-]?\s*([A-Z0-9][A-Z0-9\-\/._]{2,})/i.exec(all);
+  if(mm&&/\d/.test(mm[1]))model=mm[1].replace(/[.,;:]+$/,"");
+  const candidates=[];
+  for(const l of lines){for(const t of l.split(/\s+/)){const c=t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,"");if(c.length>=4&&/\d/.test(c)&&/[A-Za-z]/.test(c)&&isCodeTok(c)&&!/%/.test(t)&&candidates.indexOf(c)===-1)candidates.push(c)}}
+  if(!model&&candidates.length)model=candidates[0];
+  const sz=/\b(?:size|taglia|tg|beden|taille)\b\.?\s*[:\-]?\s*([A-Z0-9\/]{1,5})\b/i.exec(all);
+  const col=/\b(?:col(?:ore|or|our)?|renk|couleur)\b\.?\s*[:\-]?\s*([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 \-]{1,24})/i.exec(all);
+  const comp=lines.filter(l=>/\d{1,3}\s?%/.test(l)).join(", ");
+  return {model,candidates:candidates.slice(0,6),origin:findOrigin(all),size:sz?sz[1]:"",color:col?col[1].split(/\s{2,}|\s+(?:tg|taglia|size|art|mod|beden)\b/i)[0].trim():"",composition:comp.slice(0,160)};
+}
+/* PDF yazı katmanındaki parçaları satırlara dizer: aynı hizadaki parçalar soldan sağa birleştirilir. */
+function linesFromPdfItems(items){
+  const rows=[];
+  for(const it of items){
+    const str=(it.str||"").trim();if(!str)continue;
+    const x=it.transform[4],y=it.transform[5];
+    let row=rows.find(r=>Math.abs(r.y-y)<=3);
+    if(!row){row={y,parts:[]};rows.push(row)}
+    row.parts.push({x,str});
+  }
+  rows.sort((a,b)=>b.y-a.y);
+  return rows.map(r=>r.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(" "));
+}
+const normModel=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+if(typeof module!=="undefined")module.exports={linesFromPdfItems,parseNum,parseItemLine,parseInvoice,parseLabel,normModel,findOrigin};
+
 /* ---------- Görünümler ---------- */
 function chipsFor(o,p){
   let h='<span class="chip '+(o.shipFrom==="CN"?"cn":"it")+'">Sevk: '+esc(COUNTRY[o.shipFrom]||o.shipFrom)+'</span>';
@@ -662,18 +778,9 @@ function tabDocs(o){
   h+='<ul class="doclist">';
   for(const t of types){const mine=docs.map((d,n)=>({d,n})).filter(x=>x.d.type===t.k);
     h+='<li><div style="min-width:0;flex:1 1 220px"><div><b style="font-weight:500">'+esc(t.l)+'</b> '+(mine.length?'<span class="chip ok">Var</span>':t.req?'<span class="chip warn">Eksik</span>':'<span class="chip">İsteğe bağlı</span>')+'</div>'+(t.hint?'<div class="small muted">'+esc(t.hint)+'</div>':"")
-      +'<div class="files">'+mine.map(x=>'<span><a href="'+esc(linkOf(x.d))+'" target="_blank" rel="noopener">'+esc(x.d.name||"Dosya")+'</a> <span class="muted">· '+esc(fmtDate(x.d.at))+'</span> <button class="btn sm ghost danger" data-act="del-doc" data-n="'+x.n+'">Sil</button></span>').join("")+'</div></div>'
+      +'<div class="files">'+mine.map(x=>'<span><a href="'+esc(linkOf(x.d))+'" target="_blank" rel="noopener">'+esc(x.d.name||"Dosya")+'</a> <span class="muted">· '+esc(fmtDate(x.d.at))+'</span> '+readBadge(t.k,x)+'<button class="btn sm ghost danger" data-act="del-doc" data-n="'+x.n+'">Sil</button></span>').join("")+'</div></div>'
       +'<label class="btn sm filebtn">Yükle<input type="file" data-doc="'+t.k+'" accept="application/pdf,image/*" multiple aria-label="'+esc(t.l)+' yükle"></label></li>'}
   return h+'</ul></div>';
-}
-function tabCompare(o){
-  const g=originSplit(o);const keys=Object.keys(g);
-  let h='<div class="banner info">Bu ekran örnek dosya geldikten sonra tamamlanacak. Şimdilik yalnızca sipariş sütunu dolu: proforma, ticari fatura, beyanname ve teslim alınan sütunları gerçek belgelerin biçimine göre kurulacak.</div>';
-  h+='<div class="card"><div class="card-h"><h2>Tutar karşılaştırması ('+esc(o.currency)+')</h2></div><div class="scroll"><table><thead><tr><th>Menşe</th><th class="num">Sipariş</th><th class="num">Proforma</th><th class="num">Ticari fatura</th><th class="num">Beyanname</th><th class="num">Teslim alınan</th></tr></thead><tbody>';
-  for(const k of keys)h+='<tr><td>'+esc(COUNTRY[k]||k)+'</td><td class="num mono">'+nf.format(g[k].sum)+'</td>'+'<td class="num muted">bekliyor</td>'.repeat(4)+'</tr>';
-  h+='</tbody><tfoot><tr><td>Toplam</td><td class="num mono">'+nf.format(orderTotal(o))+'</td>'+'<td class="num muted">bekliyor</td>'.repeat(4)+'</tr></tfoot></table></div></div>';
-  h+='<div class="card"><h2 style="margin-bottom:6px">Planlanan</h2><ul class="small" style="margin:0;padding-left:18px"><li>Kalem bazında adet ve fiyat farkı işaretleme</li><li>Vergi, navlun ve müşavir masrafıyla parça başı maliyet</li><li>İtalya ve Çin menşeli kalemler için ayrı maliyet</li></ul></div>';
-  return h;
 }
 function viewArchive(){
   const q=S.aq.trim().toLocaleLowerCase("tr");const rows=[];
@@ -751,12 +858,211 @@ function itemDialog(o,item){
     saveOrder(o);
   });
 }
+
+/* ---------- Belge ve etiket okuma (cihaz içinde) ---------- */
+const LIBS={
+  tess:"https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js",
+  pdf:"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+  pdfWorker:"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
+};
+const READABLE={proforma:1,fatura:1};
+const scriptP={};
+function loadScript(src){
+  if(!scriptP[src])scriptP[src]=new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=()=>res();s.onerror=()=>{delete scriptP[src];rej(new Error("Okuma bileşeni indirilemedi. İnternet bağlantınızı kontrol edin."))};document.head.appendChild(s)});
+  return scriptP[src];
+}
+let ocrWorker=null,ocrStatus=null;
+const setStatus=t=>{const el=$("#ocrStatus");if(el)el.textContent=t};
+async function getOcr(){
+  await loadScript(LIBS.tess);
+  if(!ocrWorker){
+    setStatus("Okuma bileşenleri hazırlanıyor (ilk kullanımda biraz sürer).");
+    ocrWorker=await Tesseract.createWorker(["ita","eng"],1,{logger:m=>{if(m&&m.status==="recognizing text"&&ocrStatus)ocrStatus(Math.round((m.progress||0)*100))}});
+    await ocrWorker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1"});
+  }
+  return ocrWorker;
+}
+async function toOcrCanvas(blob,max){
+  const bmp=await createImageBitmap(blob);const k=Math.min(1,(max||2600)/Math.max(bmp.width,bmp.height));
+  const c=document.createElement("canvas");c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);return c;
+}
+async function ocrImage(source,label){
+  const w=await getOcr();
+  ocrStatus=p=>setStatus((label||"Okunuyor")+": %"+p);
+  const {data}=await w.recognize(source);ocrStatus=null;
+  return {text:data.text||"",conf:Math.round(data.confidence||0)};
+}
+async function readDocText(blob,ct){
+  if(ct==="application/pdf"||blob.type==="application/pdf"){
+    setStatus("PDF açılıyor.");
+    await loadScript(LIBS.pdf);pdfjsLib.GlobalWorkerOptions.workerSrc=LIBS.pdfWorker;
+    const doc=await pdfjsLib.getDocument({data:await blob.arrayBuffer()}).promise;
+    const pages=Math.min(doc.numPages,8);let lines=[];
+    for(let n=1;n<=pages;n++){const pg=await doc.getPage(n);const tc=await pg.getTextContent();lines=lines.concat(linesFromPdfItems(tc.items))}
+    const text=lines.join("\n");
+    if(text.replace(/\s/g,"").length>=40)return {text,method:"PDF yazı katmanı",conf:null,pages:doc.numPages};
+    let out="",conf=0;
+    for(let n=1;n<=pages;n++){
+      const pg=await doc.getPage(n);const vp=pg.getViewport({scale:2});
+      const c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;
+      await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+      const r=await ocrImage(c,"Sayfa "+n+"/"+pages+" okunuyor");out+=r.text+"\n";conf+=r.conf;
+    }
+    return {text:out,method:"Taranmış PDF, görüntüden okuma",conf:Math.round(conf/pages),pages:doc.numPages};
+  }
+  setStatus("Görüntü hazırlanıyor.");
+  const r=await ocrImage(await toOcrCanvas(blob),"Okunuyor");
+  return {text:r.text,method:"Görüntüden okuma",conf:r.conf,pages:1};
+}
+function busyLayer(title){
+  closeLayer.back=document.activeElement;
+  $("#layer").innerHTML='<div class="layer"><div class="dialog" role="dialog" aria-modal="true" aria-busy="true"><h2>'+esc(title)+'</h2><p id="ocrStatus" style="margin:0 0 10px">Dosya Drive\'dan alınıyor.</p><p class="small muted" style="margin:0">Okuma bu cihazda yapılır, belge başka bir servise gönderilmez. İlk kullanımda okuma bileşenleri indirilir, sonraki okumalar daha hızlıdır.</p></div></div>';
+}
+async function driveBlob(fileId){return (await drive(API+"/files/"+encodeURIComponent(fileId)+"?alt=media")).blob()}
+
+/* ---- Fatura ve proforma ---- */
+async function readDocAction(o,n){
+  const d=(o.docs||[])[n];if(!d)return;
+  if(S.auth!=="in")return toast("Okumak için önce giriş yapın.");
+  busyLayer("Belge okunuyor");
+  try{
+    const t0=Date.now();
+    const blob=await driveBlob(d.id);
+    const res=await readDocText(blob,d.ct);
+    const parsed=parseInvoice(res.text);
+    log("Belge okundu ("+(Date.now()-t0)+" ms): "+d.name+", yöntem: "+res.method+(res.conf!=null?", güven %"+res.conf:"")+", bulunan kalem: "+parsed.items.length);
+    reviewDialog(o,d,parsed,res);
+  }catch(e){closeLayer();log("BELGE OKUMA HATASI: "+e.message);toast("Belge okunamadı. "+e.message)}
+}
+function reviewDialog(o,d,p,res){
+  const cur=p.currency||o.currency;
+  const totOk=p.total!=null&&Math.abs(p.total-p.sum)<0.02;
+  let h='<h2>Okunan değerleri kontrol edin</h2>';
+  h+='<p class="small muted" style="margin:0 0 10px">'+esc(d.name||"Belge")+' · '+esc(res.method)+(res.conf!=null?' · güven %'+res.conf:"")+(res.pages>8?' · yalnızca ilk 8 sayfa okundu':"")+'</p>';
+  if(!p.items.length)h+='<div class="banner warn">Bu belgede kalem satırı bulunamadı. Uygulama, adet ile birim fiyatın çarpımı tutara eşit olan satırları arar. Fotoğraf bulanık ya da eğikse yeniden çekip deneyin, PDF sürümü varsa onu yükleyin.</div>';
+  else h+='<div class="banner '+(totOk?"info":"warn")+'">'+p.items.length+' kalem bulundu, kalem toplamı <b class="mono">'+esc(money(p.sum,cur))+'</b>. '+(p.total==null?"Belgede toplam satırı okunamadı, kalem sayısını gözle kontrol edin.":totOk?"Belgedeki toplamla aynı.":'Belgedeki toplam <b class="mono">'+esc(money(p.total,cur))+'</b>: eksik ya da yanlış okunan satır olabilir.')+'</div>';
+  h+='<div class="fields"><label class="f">Belge no<input type="text" class="mono" name="no" id="r-no" value="'+esc(p.no)+'"></label><label class="f">Belge tarihi<input type="date" name="date" id="r-date" value="'+esc(p.date)+'"></label><label class="f">Belgedeki toplam ('+esc(cur)+')<input type="number" step="0.01" name="total" id="r-total" value="'+esc(p.total!=null?p.total:"")+'"></label></div>';
+  h+='<div class="rv-list">'+p.items.map((it,i)=>'<div class="rv"><label class="rv-on"><input type="checkbox" name="on'+i+'" id="r-on'+i+'" checked><span class="small">Al</span></label><label class="f">Model<input type="text" class="mono" name="m'+i+'" id="r-m'+i+'" value="'+esc(it.model)+'"></label><label class="f rv-d">Tanım<input type="text" name="d'+i+'" id="r-d'+i+'" value="'+esc(it.desc)+'"></label><label class="f">Adet<input type="number" step="1" name="q'+i+'" id="r-q'+i+'" value="'+esc(it.qty)+'"></label><label class="f">Birim fiyat<input type="number" step="0.0001" name="p'+i+'" id="r-p'+i+'" value="'+esc(it.price)+'"></label><label class="f">Menşe<select name="o'+i+'" id="r-o'+i+'"><option value="">Belgede yok</option>'+Object.keys(COUNTRY).map(k=>'<option value="'+k+'"'+(it.origin===k?" selected":"")+'>'+COUNTRY[k]+'</option>').join("")+'</select></label></div>').join("")+'</div>';
+  if(p.items.length)h+='<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px"><input type="checkbox" name="addItems" id="r-add"'+((o.items||[]).length?"":" checked")+' style="margin-top:3px"><span>Siparişte bulunmayan modelleri sipariş kalemlerine de ekle</span></label>';
+  h+='<details style="margin-top:12px"><summary class="small muted" style="cursor:pointer">Okunan ham metni göster</summary><pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:var(--sunk);border-radius:8px;padding:10px;max-height:220px;overflow:auto">'+esc(res.text.slice(0,6000))+'</pre></details>';
+  h+='<div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button>'+(p.items.length?'<button class="btn primary">Karşılaştırmaya kaydet</button>':"")+'</div>';
+  dialog(h,v=>{
+    const items=[];
+    p.items.forEach((it,i)=>{if(!v["on"+i])return;items.push({model:String(v["m"+i]||"").trim(),desc:String(v["d"+i]||"").trim(),qty:Number(v["q"+i])||0,price:Number(v["p"+i])||0,origin:v["o"+i]||""})});
+    if(!items.length){toast("En az bir kalem seçin.");return false}
+    const target=(o.docs||[]).find(x=>x.id===d.id)||d;
+    target.read={no:String(v.no||"").trim(),date:v.date||"",total:v.total===""?null:Number(v.total),currency:cur,method:res.method,at:today(),items};
+    let added=0;
+    if(v.addItems){
+      const have=new Set((o.items||[]).map(i=>normModel(i.model)).filter(Boolean));
+      for(const it of items){const k=normModel(it.model);if(k&&have.has(k))continue;(o.items=o.items||[]).push({id:uid(),model:it.model,desc:it.desc,color:"",sizes:"",qty:it.qty,price:it.price,origin:it.origin||(o.shipFrom==="CN"?"CN":"IT"),gtip:""});if(k)have.add(k);added++}
+    }
+    S.tab="karsilastirma";remember();saveOrder(o);
+    toast(items.length+" kalem kaydedildi"+(added?", "+added+" tanesi sipariş kalemlerine eklendi":"")+".");
+  });
+  $("#layer form").classList.add("wide");
+}
+function readBadge(typeKey,x){
+  if(!READABLE[typeKey])return "";
+  const r=x.d.read;
+  return (r?'<span class="chip ok">'+r.items.length+' kalem okundu</span> ':"")+'<button class="btn sm" data-act="read-doc" data-n="'+x.n+'">'+(r?"Yeniden oku":"Kalemleri oku")+'</button> ';
+}
+
+/* ---- Karşılaştırma ---- */
+function readItems(o,typeKey){
+  const docs=(o.docs||[]).filter(d=>d.type===typeKey&&d.read);
+  const items=[];for(const d of docs)for(const it of d.read.items)items.push(it);
+  return {docs,items,total:docs.length&&docs.every(d=>d.read.total!=null)?docs.reduce((s,d)=>s+d.read.total,0):null};
+}
+function tabCompare(o){
+  const pf=readItems(o,"proforma"),ft=readItems(o,"fatura");
+  const keyOf=it=>normModel(it.model)||"~"+String(it.desc||"").toLocaleLowerCase("tr").replace(/\s+/g," ").trim();
+  const rows=new Map();
+  const put=(src,it)=>{const k=keyOf(it);let r=rows.get(k);if(!r){r={model:it.model,desc:it.desc,s:null,p:null,f:null};rows.set(k,r)}
+    if(!r[src])r[src]={qty:0,sum:0};r[src].qty+=Number(it.qty)||0;r[src].sum+=(Number(it.qty)||0)*(Number(it.price)||0);if(!r.desc)r.desc=it.desc;if(!r.model)r.model=it.model};
+  (o.items||[]).forEach(it=>put("s",it));pf.items.forEach(it=>put("p",it));ft.items.forEach(it=>put("f",it));
+  const price=c=>c&&c.qty?c.sum/c.qty:0;
+  const cell=c=>c?'<span class="mono">'+nfi.format(c.qty)+' × '+nf.format(price(c))+'</span>':'<span class="muted">yok</span>';
+  const diff=(a,b,an,bn)=>{const out=[];if(!a||!b)return out;
+    if(a.qty!==b.qty)out.push(["warn","Adet: "+an+" "+nfi.format(a.qty)+", "+bn+" "+nfi.format(b.qty)]);
+    if(Math.abs(price(a)-price(b))>0.005)out.push(["warn","Fiyat: "+an+" "+nf.format(price(a))+", "+bn+" "+nf.format(price(b))]);return out};
+  let h="";
+  if(!pf.docs.length&&!ft.docs.length)h+='<div class="banner info">Karşılaştırma için önce Belgeler sekmesinden proforma ya da ticari faturayı yükleyin, sonra dosyanın yanındaki <b>Kalemleri oku</b> düğmesine basın.</div>';
+  let problems=0;
+  let body="";
+  for(const r of rows.values()){
+    const flags=[];
+    if((pf.docs.length||ft.docs.length)&&!r.s)flags.push(["crit","Siparişte yok"]);
+    if(pf.docs.length&&r.s&&!r.p)flags.push(["crit","Proformada yok"]);
+    if(ft.docs.length&&r.s&&!r.f)flags.push(["crit","Faturada yok"]);
+    flags.push(...diff(r.s,r.p,"sipariş","proforma"));
+    flags.push(...diff(r.s,r.f,"sipariş","fatura"));
+    if(!r.s)flags.push(...diff(r.p,r.f,"proforma","fatura"));
+    const any=pf.docs.length||ft.docs.length;
+    if(flags.length)problems++;
+    body+='<tr><td><span class="mono">'+esc(r.model||"")+'</span><div class="small muted">'+esc(r.desc||"")+'</div></td><td class="num">'+cell(r.s)+'</td><td class="num">'+(pf.docs.length?cell(r.p):'<span class="muted">okunmadı</span>')+'</td><td class="num">'+(ft.docs.length?cell(r.f):'<span class="muted">okunmadı</span>')+'</td><td>'+(flags.length?flags.map(f=>'<span class="chip '+f[0]+'" style="white-space:normal;margin:1px 0">'+esc(f[1])+'</span>').join(" "):any?'<span class="chip ok">Uyumlu</span>':"")+'</td></tr>';
+  }
+  const sumOf=src=>{let s=0;for(const r of rows.values())if(r[src])s+=r[src].sum;return s};
+  const tot=(src,info)=>info.docs.length?'<span class="mono">'+nf.format(sumOf(src))+'</span>'+(info.total!=null&&Math.abs(info.total-sumOf(src))>0.02?'<div class="small" style="color:var(--warn)">belgede '+nf.format(info.total)+'</div>':""):'<span class="muted">okunmadı</span>';
+  if(pf.docs.length||ft.docs.length)h+='<div class="banner '+(problems?"warn":"info")+'">'+(problems?'<b>'+problems+' kalemde fark var.</b> Aşağıda işaretli satırlara bakın.':"Okunan belgeler siparişle uyumlu.")+'</div>';
+  h+='<div class="card"><div class="card-h"><h2>Kalem karşılaştırması ('+esc(o.currency)+')</h2><span class="small muted">adet × birim fiyat</span></div>';
+  if(!rows.size)h+='<div class="empty">Karşılaştırılacak kalem yok.</div></div>';
+  else h+='<div class="scroll"><table><thead><tr><th>Model</th><th class="num">Sipariş</th><th class="num">Proforma</th><th class="num">Ticari fatura</th><th>Durum</th></tr></thead><tbody>'+body+'</tbody><tfoot><tr><td>Toplam</td><td class="num mono">'+nf.format(sumOf("s"))+'</td><td class="num">'+tot("p",pf)+'</td><td class="num">'+tot("f",ft)+'</td><td></td></tr></tfoot></table></div></div>';
+  const src=[...pf.docs,...ft.docs];
+  if(src.length)h+='<div class="card"><h2 style="margin-bottom:6px">Okunan belgeler</h2><ul class="small" style="margin:0;padding-left:18px">'+src.map(d=>'<li>'+esc(d.name||"Belge")+(d.read.no?', no <span class="mono">'+esc(d.read.no)+'</span>':"")+(d.read.date?', '+esc(fmtDate(d.read.date)):"")+' · '+esc(d.read.method)+'</li>').join("")+'</ul></div>';
+  h+='<div class="card small muted">Beyanname kıymeti, vergiler ve teslim alınan adet karşılaştırması sonraki adımda, gerçek beyanname ve müşavir dökümü örneklerine göre eklenecek.</div>';
+  return h;
+}
+
+/* ---- Ürün etiketi ---- */
 function photoDialog(o,n){
   const a=o.photos[n];if(!a)return;
   dialog('<h2>Fotoğraf</h2><label class="f">Hangi kaleme ait?<select name="itemId" id="p-item"><option value="">Kalem seçilmedi</option>'+(o.items||[]).map(i=>'<option value="'+esc(i.id)+'"'+(a.itemId===i.id?" selected":"")+'>'+esc(i.model+" "+i.desc)+'</option>').join("")+'</select></label>'
+    +'<div style="margin-top:12px"><button type="button" class="btn" data-act="read-label" data-n="'+n+'">Etiketi oku</button><div class="small muted" style="margin-top:6px">Fotoğrafta ürün etiketi varsa model kodu, menşe, renk ve beden okunur. Etiketsiz ürün fotoğrafında okunacak yazı olmaz.</div></div>'
     +'<div class="acts"><button type="button" class="btn ghost danger" data-act="del-photo" data-n="'+n+'" style="margin-right:auto">Fotoğrafı sil</button><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div>',
   v=>{a.itemId=v.itemId;saveOrder(o)});
 }
+async function readLabelAction(o,n){
+  const a=(o.photos||[])[n];if(!a)return;
+  if(S.auth!=="in")return toast("Okumak için önce giriş yapın.");
+  busyLayer("Etiket okunuyor");
+  try{
+    const t0=Date.now();
+    const blob=await driveBlob(a.id);setStatus("Görüntü hazırlanıyor.");
+    const r=await ocrImage(await toOcrCanvas(blob,2200),"Okunuyor");
+    const p=parseLabel(r.text);
+    log("Etiket okundu ("+(Date.now()-t0)+" ms, güven %"+r.conf+"): model "+(p.model||"yok")+", menşe "+(p.origin||"yok"));
+    labelDialog(o,a,p,r);
+  }catch(e){closeLayer();log("ETİKET OKUMA HATASI: "+e.message);toast("Etiket okunamadı. "+e.message)}
+}
+function labelDialog(o,a,p,r){
+  const found=p.model||p.origin||p.color||p.size||p.composition;
+  let h='<h2>Etiketten okunanlar</h2><p class="small muted" style="margin:0 0 10px">Görüntüden okuma · güven %'+r.conf+'</p>';
+  if(!found)h+='<div class="banner warn">Fotoğrafta okunabilir bir etiket bulunamadı. Etiketi yakından, düz ve iyi ışıkta çekip yeniden deneyin ya da bilgileri elle girin.</div>';
+  h+='<div class="fields"><label class="f">Model kodu<input type="text" class="mono" name="model" id="l-model" list="l-cand" value="'+esc(p.model)+'"><datalist id="l-cand">'+p.candidates.map(c=>'<option value="'+esc(c)+'">').join("")+'</datalist></label>'
+    +'<label class="f">Menşe<select name="origin" id="l-origin"><option value="">Etikette yok</option>'+Object.keys(COUNTRY).map(k=>'<option value="'+k+'"'+(p.origin===k?" selected":"")+'>'+COUNTRY[k]+'</option>').join("")+'</select></label>'
+    +'<label class="f">Renk<input type="text" name="color" id="l-color" value="'+esc(p.color)+'"></label>'
+    +'<label class="f">Beden<input type="text" name="size" id="l-size" value="'+esc(p.size)+'"></label>'
+    +'<label class="f wide">Tanım (kumaş bileşimi önerildi, düzeltebilirsiniz)<input type="text" name="desc" id="l-desc" value="'+esc(p.composition)+'"></label></div>';
+  h+='<p class="small muted" style="margin:10px 0 0">Model siparişte varsa fotoğraf o kaleme bağlanır ve boş alanları doldurulur. Yoksa yeni kalem açılır.</p>';
+  h+='<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">Okunan ham metni göster</summary><pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:var(--sunk);border-radius:8px;padding:10px;max-height:180px;overflow:auto">'+esc(r.text.slice(0,3000))+'</pre></details>';
+  h+='<div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaleme işle</button></div>';
+  dialog(h,v=>{
+    const model=String(v.model||"").trim(),desc=String(v.desc||"").trim();
+    if(!model&&!desc){toast("Model kodu ya da tanım yazın.");return false}
+    const k=normModel(model);let it=k?(o.items||[]).find(i=>normModel(i.model)===k):null;const isNew=!it;
+    if(isNew){it={id:uid(),model,desc,color:"",sizes:"",qty:0,price:0,origin:v.origin||(o.shipFrom==="CN"?"CN":"IT"),gtip:""};(o.items=o.items||[]).push(it)}
+    let conflict="";
+    if(!isNew&&v.origin&&it.origin&&it.origin!==v.origin)conflict=" Dikkat: kalemde menşe "+COUNTRY[it.origin]+", etikette "+COUNTRY[v.origin]+". Kalem değiştirilmedi, kontrol edin.";
+    if(!it.color&&v.color)it.color=String(v.color).trim();
+    if(!it.sizes&&v.size)it.sizes=String(v.size).trim();
+    if(!it.desc&&desc)it.desc=desc;
+    const ph=(o.photos||[]).find(x=>x.id===a.id);if(ph)ph.itemId=it.id;
+    saveOrder(o);toast((isNew?"Yeni kalem açıldı: ":"Fotoğraf kaleme bağlandı: ")+(it.model||it.desc)+"."+conflict);
+  });
+}
+
 /* ---------- Olaylar ---------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-act]");if(!t)return;const a=t.dataset.act;const o=getOrder(S.sel);
@@ -773,6 +1079,8 @@ document.addEventListener("click",e=>{
   if(a==="edit-item"){itemDialog(o,(o.items||[]).find(i=>i.id===t.dataset.id));return}
   if(a==="del-item"){o.items=(o.items||[]).filter(i=>i.id!==t.dataset.id);(o.photos||[]).forEach(p=>{if(p.itemId===t.dataset.id)p.itemId=""});closeLayer();saveOrder(o);return}
   if(a==="stage-today"){o.stages=o.stages||{};o.stages[t.dataset.v]=today();saveOrder(o);return}
+  if(a==="read-doc"){readDocAction(o,Number(t.dataset.n));return}
+  if(a==="read-label"){readLabelAction(o,Number(t.dataset.n));return}
   if(a==="view-photo"){lightbox(o,Number(t.dataset.n));return}
   if(a==="photo-menu"){photoDialog(o,Number(t.dataset.n));return}
   if(a==="del-photo"){const n=Number(t.dataset.n);const ph=o.photos[n];closeLayer();o.photos.splice(n,1);saveOrder(o);trashFile(o.id,ph&&ph.id);return}
