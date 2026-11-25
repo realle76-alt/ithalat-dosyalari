@@ -3,295 +3,906 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>İthalat Dosyaları: bağlantı denemesi</title>
+<title>İthalat Dosyaları</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="İthalat">
 <meta name="theme-color" content="#243b8f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#eceff3;--surface:#fff;--ink:#151a25;--muted:#586173;--line:#d0d6df;--accent:#243b8f;--ok:#1b6e37;--ok-soft:#dcf1e3;--crit:#ac241c;--crit-soft:#fbe2e0;--warn:#7c5200;--warn-soft:#fbeecb}
+/* Yerleşim: solda sabit ray, sağda tek sütun çalışma alanı. Telefonda ray alt sekme çubuğuna iner. */
+:root{
+  --bg:#eceff3; --surface:#ffffff; --sunk:#e1e5eb; --ink:#151a25; --muted:#586173; --line:#d0d6df;
+  --accent:#243b8f; --accent-ink:#ffffff; --accent-soft:#e2e7f8;
+  --it:#0b6e63; --it-soft:#d9f0ec; --cn:#96285f; --cn-soft:#f6dfeb;
+  --ok:#1b6e37; --ok-soft:#dcf1e3; --warn:#7c5200; --warn-soft:#fbeecb; --crit:#ac241c; --crit-soft:#fbe2e0;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#10131a; --surface:#191d27; --sunk:#232836; --ink:#e8ebf2; --muted:#9aa3b5; --line:#303748;
+    --accent:#8fa6ff; --accent-ink:#0d1330; --accent-soft:#222c52;
+    --it:#5fd1c2; --it-soft:#12352f; --cn:#f08fbf; --cn-soft:#3d1a2c;
+    --ok:#6fd392; --ok-soft:#143322; --warn:#f0c264; --warn-soft:#3a2d0c; --crit:#ff9087; --crit-soft:#421a17;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#10131a; --surface:#191d27; --sunk:#232836; --ink:#e8ebf2; --muted:#9aa3b5; --line:#303748;
+  --accent:#8fa6ff; --accent-ink:#0d1330; --accent-soft:#222c52;
+  --it:#5fd1c2; --it-soft:#12352f; --cn:#f08fbf; --cn-soft:#3d1a2c;
+  --ok:#6fd392; --ok-soft:#143322; --warn:#f0c264; --warn-soft:#3a2d0c; --crit:#ff9087; --crit-soft:#421a17;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,"Segoe UI",system-ui,sans-serif}
-main{max-width:680px;margin:0 auto;padding:20px 16px 48px}
-h1{font-size:22px;margin:0 0 4px}
-h2{font-size:16px;margin:0 0 8px}
-p{margin:0 0 10px}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 15px/1.45 var(--body);-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:26px;font-weight:700;line-height:1.15}
+h2{font-size:17px;font-weight:700}
+h3{font-size:14px;font-weight:700}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 .muted{color:var(--muted)}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
-.btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:44px;color:var(--ink)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn[disabled]{opacity:.45;cursor:default}
-.row{display:flex;flex-wrap:wrap;gap:8px}
-.pill{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12.5px;font-weight:600;background:var(--line);color:var(--muted)}
-.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
-code,pre{font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
-code{background:var(--bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
-pre{background:#10131a;color:#e8ebf2;border-radius:8px;padding:12px;overflow:auto;max-height:340px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
-dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0}
-dt{color:var(--muted)} dd{margin:0;overflow-wrap:anywhere}
-.step{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-input[type=file]{max-width:100%}
-img.thumb{max-width:120px;border-radius:6px;border:1px solid var(--line);margin-top:8px}
+.small{font-size:13px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:216px minmax(0,1fr);min-height:100vh}
+.rail{background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh}
+.brand{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.1;padding:0 8px}
+.brand small{display:block;font-family:var(--body);font-weight:400;font-size:12px;color:var(--muted);margin-top:4px}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--ink);font-weight:500}
+.nav a:hover{background:var(--sunk)}
+.nav a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav .count{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.rail .btn{width:100%}
+.rail-foot{margin-top:auto;font-size:12px;color:var(--muted);padding:0 8px}
+main{padding:24px clamp(16px,3vw,36px) 48px;min-width:0;max-width:1120px;width:100%}
+.tabbar{display:none}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 13px;font-weight:500;cursor:pointer;min-height:38px;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{background:var(--sunk);color:var(--ink)}
+.btn.danger{color:var(--crit)}
+.btn.sm{min-height:32px;padding:4px 10px;font-size:13px}
+.btn[disabled]{opacity:.5;cursor:default}
+
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:18px}
+.head p{margin:4px 0 0;color:var(--muted)}
+.banner{border-radius:var(--r);padding:10px 14px;margin-bottom:14px;font-size:14px;border:1px solid transparent}
+.banner.warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 25%,transparent)}
+.banner.info{background:var(--accent-soft);color:var(--accent)}
+.banner.crit{background:var(--crit-soft);color:var(--crit)}
+
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.tile b{display:block;font-family:var(--display);font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.tile span{font-size:12.5px;color:var(--muted)}
+.tile.alert b{color:var(--warn)}
+
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.seg{display:inline-flex;background:var(--sunk);border-radius:9px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:7px;cursor:pointer;font-weight:500;color:var(--muted);min-height:32px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+input[type=text],input[type=search],input[type=date],input[type=number],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:38px;width:100%}
+textarea{min-height:76px;resize:vertical}
+.filters input[type=search]{flex:1 1 200px;width:auto}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1.6fr) auto;gap:8px 18px;align-items:center;text-align:left;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;width:100%}
+.row:hover{border-color:var(--muted)}
+.row.it{border-left-color:var(--it)} .row.cn{border-left-color:var(--cn)}
+.row .no{font-family:var(--mono);font-weight:500}
+.row .sup{font-weight:600;overflow-wrap:anywhere}
+.row .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.row .total{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:99px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--sunk);color:var(--muted)}
+.chip.it{background:var(--it-soft);color:var(--it)} .chip.cn{background:var(--cn-soft);color:var(--cn)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)} .chip.crit{background:var(--crit-soft);color:var(--crit)}
+.steps{display:flex;gap:3px;margin-bottom:5px}
+.steps i{flex:1;height:6px;border-radius:3px;background:var(--sunk)}
+.steps i.on{background:var(--accent)}
+.steps i.now{background:repeating-linear-gradient(90deg,var(--accent) 0 4px,var(--accent-soft) 4px 8px)}
+
+.ohead{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.ohead.it{border-top-color:var(--it)} .ohead.cn{border-top-color:var(--cn)}
+.ohead-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:flex-start}
+.ohead .no{font-family:var(--mono);color:var(--muted);font-size:13px}
+.ohead .facts{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13.5px;color:var(--muted)}
+.ohead .facts b{color:var(--ink);font-weight:500}
+.back{display:inline-flex;margin-bottom:10px;color:var(--muted);text-decoration:none;font-size:14px}
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{border:0;background:transparent;padding:10px 12px;cursor:pointer;font-weight:500;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs .n{font-family:var(--mono);font-size:12px;margin-left:4px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+tfoot td{font-weight:600;border-top:1px solid var(--line)}
+th.num,td.num{text-align:right}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px}
+.split .card{margin:0}
+.split b{font-family:var(--display);font-size:20px;font-variant-numeric:tabular-nums}
+
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.photo{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--sunk)}
+.photo button.view{display:block;border:0;padding:0;background:none;cursor:zoom-in;width:100%}
+.photo img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover}
+.photo .cap{padding:6px 8px;font-size:12px;display:flex;justify-content:space-between;gap:6px;align-items:center;background:var(--surface)}
+.photo .cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:22px;text-align:center;color:var(--muted);background:var(--surface)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.timeline li:last-child{border-bottom:0}
+.dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);margin-left:3px}
+.done .dot{background:var(--accent);border-color:var(--accent)}
+.now .dot{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.timeline .lab{font-weight:500}
+.timeline .pending .lab{color:var(--muted)}
+.timeline .ctl{display:flex;gap:6px;align-items:center}
+.timeline input[type=date]{width:150px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+label.f.wide{grid-column:1/-1}
+
+.doclist{list-style:none;margin:0;padding:0}
+.doclist li{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line)}
+.doclist li:last-child{border-bottom:0}
+.doclist .files{display:flex;flex-direction:column;gap:3px;font-size:13px;margin-top:3px}
+.doclist a{color:var(--accent)}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;min-height:0;padding:0}
+.empty{text-align:center;color:var(--muted);padding:28px 12px}
+
+.layer{position:fixed;inset:0;background:rgba(10,14,24,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.dialog{background:var(--surface);border-radius:14px;padding:18px;width:min(560px,100%);max-height:calc(100% - 16px);overflow:auto;border:1px solid var(--line)}
+.dialog h2{margin-bottom:12px}
+.dialog .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.lightbox img{max-width:100%;max-height:calc(100vh - 90px);border-radius:8px;display:block;margin:0 auto}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:9px;font-size:14px;z-index:30;max-width:calc(100% - 32px)}
+
+@media (max-width:760px){
+  .app{display:block}
+  .rail{display:none}
+  main{padding:16px 16px 96px}
+  .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:10}
+  .tabbar a{padding:13px 6px 15px;text-align:center;text-decoration:none;color:var(--muted);font-weight:500;font-size:13.5px}
+  .tabbar a[aria-current="page"]{color:var(--accent);box-shadow:inset 0 2px 0 var(--accent)}
+  .tiles{grid-template-columns:1fr 1fr}
+  .row{grid-template-columns:1fr}
+  .row .total{text-align:left}
+  h1{font-size:22px}
+  .timeline li{grid-template-columns:22px minmax(0,1fr)}
+  .timeline .ctl{grid-column:2}
+  table.items thead{display:none}
+  table.items,table.items tbody,table.items tr,table.items td{display:block}
+  table.items tr{border-bottom:1px solid var(--line);padding:8px 0}
+  table.items td{border:0;padding:2px 0;text-align:left}
+  table.items td[data-l]::before{content:attr(data-l) ": ";color:var(--muted);font-size:12.5px}
+  table.items tfoot tr{border:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
-<main>
-  <h1>Bağlantı denemesi</h1>
-  <p class="muted">Bu sayfa asıl uygulama değil. Tek amacı Google girişi ile Drive'a yazmanın bilgisayarda, iPhone Safari'de ve ana ekrana eklenmiş hâlde çalışıp çalışmadığını görmek.</p>
-
-  <div class="card" id="cfgCard">
-    <h2>Ortam</h2>
-    <dl>
-      <dt>Çalışma biçimi</dt><dd id="envMode"></dd>
-      <dt>JavaScript kaynağı</dt><dd><code id="envOrigin"></code></dd>
-      <dt>Yönlendirme URI</dt><dd><code id="envRedirect"></code></dd>
-      <dt>İstemci kimliği</dt><dd id="envClient"></dd>
-    </dl>
-    <p class="muted" style="margin:10px 0 0">İlk iki adres Google Cloud'daki istemci ayarlarına harfi harfine bu hâliyle girilmelidir.</p>
-  </div>
-
-  <div class="card">
-    <div class="step"><h2>1. Google ile giriş</h2><span class="pill" id="s1">Bekliyor</span></div>
-    <p class="muted">İki yöntemi de deneyin. iPhone'da ana ekran uygulamasında hangisinin çalıştığını öğrenmemiz gerekiyor.</p>
-    <div class="row">
-      <button class="btn primary" id="btnPopup">Giriş: açılır pencere</button>
-      <button class="btn" id="btnRedirect">Giriş: yönlendirme</button>
-      <button class="btn" id="btnOut" disabled>Çıkış</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="step"><h2>2. Klasör aç</h2><span class="pill" id="s2">Bekliyor</span></div>
-    <p class="muted">Drive'da kök arşiv klasörünü ve içinde bir deneme siparişi klasörünü oluşturur. Varsa yenisini açmaz.</p>
-    <button class="btn" id="btnFolder" disabled>Klasörleri oluştur</button>
-  </div>
-
-  <div class="card">
-    <div class="step"><h2>3. Fotoğraf ya da PDF yükle</h2><span class="pill" id="s3">Bekliyor</span></div>
-    <p class="muted">iPhone'da kamerayı ya da galeriyi açmalı.</p>
-    <input type="file" id="file" accept="image/*,application/pdf" disabled>
-    <div id="upOut"></div>
-  </div>
-
-  <div class="card">
-    <div class="step"><h2>4. Veri dosyası yaz ve oku</h2><span class="pill" id="s4">Bekliyor</span></div>
-    <p class="muted">Sipariş bilgilerinin tutulacağı küçük dosyayı yazar, sonra geri okuyup aynı olduğunu doğrular.</p>
-    <button class="btn" id="btnData" disabled>Yaz ve oku</button>
-  </div>
-
-  <div class="card">
-    <div class="step"><h2>Günlük</h2><button class="btn" id="btnCopy">Günlüğü kopyala</button></div>
-    <p class="muted">Her denemeden sonra bu günlüğü kopyalayıp gönderin.</p>
-    <pre id="log" aria-live="polite"></pre>
-  </div>
-</main>
-
-<script src="config.js"></script>
+<div class="app">
+  <aside class="rail">
+    <div class="brand">İthalat Dosyaları<small>İtalya ve Çin siparişleri</small></div>
+    <nav class="nav" aria-label="Bölümler">
+      <a href="#siparisler" data-nav="siparisler">Siparişler <span class="count" id="navCount"></span></a>
+      <a href="#arsiv" data-nav="arsiv">Belge arşivi <span class="count" id="navDocs"></span></a>
+      <a href="#hesap" data-nav="hesap">Hesap ve tanılama</a>
+    </nav>
+    <button class="btn primary" data-act="new-order">Yeni sipariş</button>
+    <div class="rail-foot" id="railFoot"></div>
+  </aside>
+  <main id="main" aria-live="polite"></main>
+</div>
+<nav class="tabbar" aria-label="Bölümler">
+  <a href="#siparisler" data-nav="siparisler">Siparişler</a>
+  <a href="#yeni" data-act="new-order">Yeni</a>
+  <a href="#arsiv" data-nav="arsiv">Arşiv</a>
+  <a href="#hesap" data-nav="hesap">Hesap</a>
+</nav>
+<div id="layer"></div>
+<div id="toast" class="toast" hidden></div>
+<script src="config.js?v=2"></script>
 <script>
 "use strict";
-const CFG = window.ITHALAT_CONFIG || {};
-const SCOPE = "https://www.googleapis.com/auth/drive.file";
-const API = "https://www.googleapis.com/drive/v3";
-const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
-const FOLDER_MIME = "application/vnd.google-apps.folder";
-const TEST_ORDER = "DENEME-001 Bağlantı testi";
-const REDIRECT = location.origin + location.pathname;
-const $ = id => document.getElementById(id);
-const standalone = !!navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
-const configured = !!CFG.clientId && CFG.clientId.indexOf("BURAYA") === -1;
-let token = null, tokenUntil = 0, orderFolderId = null, gisClient = null;
-
-function log(msg, data) {
-  const t = new Date().toLocaleTimeString("tr-TR");
-  let line = "[" + t + "] " + msg;
-  if (data !== undefined) line += " " + (typeof data === "string" ? data : JSON.stringify(data));
-  $("log").textContent += line + "\n";
-  $("log").scrollTop = $("log").scrollHeight;
+const APP_VERSION="0.2.0";
+/* ---------- Sabitler ---------- */
+const STAGES=[
+  {k:"siparis",l:"Sipariş verildi",wait:"Taslak"},
+  {k:"proforma",l:"Proforma alındı",wait:"Proforma bekleniyor"},
+  {k:"odeme",l:"Ödeme yapıldı",wait:"Ödeme bekleniyor"},
+  {k:"yukleme",l:"Yüklendi",wait:"Yükleme bekleniyor"},
+  {k:"varis",l:{IT:"Gümrüğe geldi",CN:"Limana geldi"},wait:"Yolda"},
+  {k:"tescil",l:"Beyanname tescil edildi",wait:"Gümrükte, beyanname bekleniyor",customs:true},
+  {k:"vergi",l:"Vergiler ödendi",wait:"Gümrükte, vergi ödemesi bekleniyor",customs:true},
+  {k:"depo",l:"Depoya girdi",wait:"Teslim bekleniyor"}
+];
+const COUNTRY={IT:"İtalya",CN:"Çin",TR:"Türkiye",XX:"Diğer"};
+const CUSTOMS_WARN_DAYS=7;
+function docTypesFor(o){
+  const cnItem=(o.items||[]).some(i=>i.origin==="CN");
+  const t=[
+    {k:"proforma",l:"Proforma fatura",req:true},
+    {k:"fatura",l:"Ticari fatura",req:true},
+    {k:"ceki",l:"Çeki listesi",req:true}
+  ];
+  if(o.shipFrom==="CN"){
+    t.push({k:"tasima",l:"Konşimento",req:true},{k:"ordino",l:"Ordino",req:true},{k:"mense",l:"Menşe şahadetnamesi",req:true},{k:"sigorta",l:"Sigorta poliçesi",req:false});
+  }else{
+    t.push({k:"tasima",l:"CMR",req:true},{k:"atr",l:"A.TR dolaşım belgesi",req:true},{k:"mense",l:"Menşe beyanı / şahadetnamesi",req:cnItem,hint:cnItem?"Çin menşeli kalem olduğu için":"Müşavir isterse"});
+  }
+  t.push(
+    {k:"beyanname",l:"Gümrük beyannamesi",req:true},
+    {k:"makbuz",l:"Vergi tahakkuk ve makbuzu",req:true},
+    {k:"musavir",l:"Müşavir faturası ve masraf dökümü",req:true},
+    {k:"navlun",l:"Navlun faturası",req:true},
+    {k:"odeme",l:"Ödeme dekontu (swift)",req:false},
+    {k:"diger",l:"Diğer",req:false}
+  );
+  return t;
 }
-function pill(id, state, text) { const p = $(id); p.className = "pill" + (state ? " " + state : ""); p.textContent = text; }
-function store(k, v) { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) {} }
-function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
 
-function setSignedIn(tok, expiresIn, how) {
-  token = tok; tokenUntil = Date.now() + (Number(expiresIn) || 3600) * 1000;
-  store("ithalat.tok", JSON.stringify({ token, tokenUntil }));
-  pill("s1", "ok", "Giriş yapıldı");
-  log("GİRİŞ BAŞARILI, yöntem: " + how + ", süre (sn): " + expiresIn);
-  for (const id of ["btnFolder", "file", "btnData", "btnOut"]) $(id).disabled = false;
-  whoAmI();
+/* ---------- Yardımcılar ---------- */
+const $=s=>document.querySelector(s);
+const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const fmtDate=s=>{if(!s)return "";const p=String(s).slice(0,10).split("-");return p.length===3?p[2]+"."+p[1]+"."+p[0]:s};
+const daysSince=s=>s?Math.max(0,Math.round((Date.parse(today())-Date.parse(s))/864e5)):null;
+const nf=new Intl.NumberFormat("tr-TR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const nfi=new Intl.NumberFormat("tr-TR");
+const money=(v,c)=>nf.format(v||0)+" "+(c||"");
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+const lineTotal=i=>(Number(i.qty)||0)*(Number(i.price)||0);
+const orderTotal=o=>(o.items||[]).reduce((s,i)=>s+lineTotal(i),0);
+const orderQty=o=>(o.items||[]).reduce((s,i)=>s+(Number(i.qty)||0),0);
+const stageLabel=(st,o)=>typeof st.l==="string"?st.l:(st.l[o.shipFrom]||st.l.IT);
+function progress(o){
+  const s=o.stages||{};const idx=STAGES.findIndex(st=>!s[st.k]);
+  const done=idx===-1;const cur=done?null:STAGES[idx];
+  let last=null;for(const st of STAGES){if(s[st.k]&&(!last||s[st.k]>last))last=s[st.k]}
+  const wait=done?null:daysSince(last);
+  return {idx:done?STAGES.length:idx,done,cur,status:done?"Tamamlandı":cur.wait,wait,
+    inCustoms:!done&&!!cur.customs,onWay:!done&&cur.k==="varis",
+    late:!done&&!!cur.customs&&wait!=null&&wait>=CUSTOMS_WARN_DAYS};
 }
-function setSignedOut() {
-  token = null; store("ithalat.tok", null);
-  pill("s1", "", "Bekliyor");
-  for (const id of ["btnFolder", "file", "btnData", "btnOut"]) $(id).disabled = true;
+function missingDocs(o){
+  const have=new Set((o.docs||[]).map(d=>d.type));
+  return docTypesFor(o).filter(t=>t.req&&!have.has(t.k));
+}
+const mixedOrigin=o=>o.shipFrom==="IT"&&(o.items||[]).some(i=>i.origin==="CN");
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>{t.hidden=true},4200)}
+
+const PLACEHOLDER="data:image/svg+xml,"+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 4"><rect width="3" height="4" fill="#d0d6df"/></svg>');
+/* ---------- Durum, oturum ve Drive katmanı ---------- */
+const CFG=window.ITHALAT_CONFIG||{};
+const SCOPE="https://www.googleapis.com/auth/drive.file";
+const API="https://www.googleapis.com/drive/v3";
+const UPLOAD="https://www.googleapis.com/upload/drive/v3/files";
+const FOLDER_MIME="application/vnd.google-apps.folder";
+const DATA_FILE="siparis.json";
+const REDIRECT=location.origin+location.pathname;
+const configured=!!CFG.clientId&&CFG.clientId.indexOf("BURAYA")===-1;
+const standalone=!!navigator.standalone||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);
+
+const S={orders:[],loaded:false,auth:"out",email:"",pending:0,syncErr:"",syncing:false,view:"siparisler",sel:null,tab:"kalemler",ship:"all",q:"",aq:"",busy:false};
+let token=null,tokenUntil=0,gisClient=null,rootId=null;const yearIds={};const queues={};const blobCache=new Map();
+const LOG=[];
+function log(msg,data){
+  let line="["+new Date().toLocaleTimeString("tr-TR")+"] "+msg;
+  if(data!==undefined)line+=" "+(typeof data==="string"?data:JSON.stringify(data));
+  LOG.push(line);if(LOG.length>400)LOG.shift();
+  const el=document.getElementById("logBox");if(el)el.textContent=LOG.join("\n");
+}
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}};
+const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{if(v==null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v)}catch(e){}}};
+S.sel=ls.get("ithalat.sel")||null;S.tab=ls.get("ithalat.tab")||"kalemler";S.email=ls.get("ithalat.email")||"";
+const remember=()=>{ls.set("ithalat.sel",S.sel||"");ls.set("ithalat.tab",S.tab)};
+const getOrder=id=>S.orders.find(o=>o.id===id);
+const sortOrders=()=>S.orders.sort((a,b)=>String(b.orderDate||"").localeCompare(String(a.orderDate||""))||String(b.no).localeCompare(String(a.no)));
+
+/* Yerel önbellek: son görülen siparişler ve henüz gönderilememiş değişiklikler burada bekler. */
+const idb={
+  db:null,
+  open(){return new Promise((res,rej)=>{const r=indexedDB.open("ithalat",1);r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})},
+  async get(k){try{const d=this.db||(this.db=await this.open());return await new Promise((res,rej)=>{const q=d.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}catch(e){return undefined}},
+  async set(k,v){try{const d=this.db||(this.db=await this.open());await new Promise((res,rej)=>{const t=d.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error)})}catch(e){}}
+};
+let cacheT=null;
+function saveCache(){clearTimeout(cacheT);cacheT=setTimeout(()=>{idb.set("orders",JSON.parse(JSON.stringify(S.orders)))},250)}
+
+/* ---- Oturum ---- */
+function setToken(tok,expiresIn,how){
+  token=tok;tokenUntil=Date.now()+(Number(expiresIn)||3600)*1000;
+  ss.set("ithalat.tok",JSON.stringify({token,tokenUntil}));
+  S.auth="in";S.syncErr="";
+  log("GİRİŞ BAŞARILI, yöntem: "+how+", süre (sn): "+expiresIn);
+  render();boot();
+}
+function expire(){if(S.auth==="in"){S.auth="expired";token=null;ss.set("ithalat.tok",null);log("Oturum süresi doldu.");render()}}
+async function signOut(){
+  token=null;ss.set("ithalat.tok",null);S.auth="out";S.orders=[];S.loaded=false;rootId=null;
+  for(const k in yearIds)delete yearIds[k];
+  await idb.set("orders",[]);log("Çıkış yapıldı, bu cihazdaki önbellek temizlendi.");
+  location.hash="#siparisler";render();
+}
+function loadGis(){
+  return new Promise((res,rej)=>{
+    if(window.google&&google.accounts&&google.accounts.oauth2)return res();
+    const s=document.createElement("script");s.src="https://accounts.google.com/gsi/client";s.async=true;
+    s.onload=()=>res();s.onerror=()=>rej(new Error("Google giriş kitaplığı yüklenemedi."));document.head.appendChild(s);
+  });
+}
+async function loginPopup(){
+  if(!configured)return toast("config.js içinde istemci kimliği tanımlı değil.");
+  try{
+    await loadGis();
+    if(!gisClient)gisClient=google.accounts.oauth2.initTokenClient({client_id:CFG.clientId,scope:SCOPE,
+      callback:r=>{if(r&&r.access_token)setToken(r.access_token,r.expires_in,"açılır pencere");else{log("Açılır pencere girişi reddedildi:",r);toast("Giriş tamamlanmadı.")}},
+      error_callback:e=>{log("Açılır pencere hatası:",{type:e&&e.type,message:e&&e.message});toast("Giriş penceresi açılamadı. Diğer giriş yöntemini deneyin.")}});
+    log("Açılır pencere ile giriş başlatılıyor.");
+    gisClient.requestAccessToken(S.email?{hint:S.email,prompt:""}:{});
+  }catch(e){log("HATA: "+e.message);toast(e.message)}
+}
+function loginRedirect(){
+  if(!configured)return toast("config.js içinde istemci kimliği tanımlı değil.");
+  const state=uid()+uid();ss.set("ithalat.state",state);
+  const p=new URLSearchParams({client_id:CFG.clientId,redirect_uri:REDIRECT,response_type:"token",scope:SCOPE,state,include_granted_scopes:"true"});
+  if(S.email)p.set("login_hint",S.email);
+  log("Yönlendirme ile giriş başlatılıyor.");
+  location.assign("https://accounts.google.com/o/oauth2/v2/auth?"+p.toString());
+}
+function handleRedirectReturn(){
+  if(!location.hash||location.hash.length<2)return null;
+  const h=new URLSearchParams(location.hash.slice(1));
+  if(!h.has("access_token")&&!h.has("error"))return null;
+  history.replaceState(null,"",location.pathname+location.search+"#siparisler");
+  if(h.has("error")){log("Yönlendirme girişi hata döndü: "+h.get("error"));return {error:"Giriş tamamlanmadı: "+h.get("error")}}
+  const expected=ss.get("ithalat.state");ss.set("ithalat.state",null);
+  if(!expected||expected!==h.get("state")){log("UYARI: Dönüşte güvenlik değeri (state) eşleşmedi. Giriş başka bir pencerede tamamlanmış olabilir. Belirteç kullanılmadı.");return {error:"Giriş bu pencereye geri dönmedi. Diğer giriş yöntemini deneyin."}}
+  return {token:h.get("access_token"),expiresIn:h.get("expires_in")};
 }
 
-async function drive(url, opts) {
-  if (!token) throw new Error("Önce giriş yapın.");
-  const o = Object.assign({}, opts || {});
-  o.headers = Object.assign({ Authorization: "Bearer " + token }, o.headers || {});
-  const r = await fetch(url, o);
-  if (!r.ok) {
-    let detail = ""; try { const j = await r.json(); detail = (j.error && j.error.message) || JSON.stringify(j); } catch (e) {}
-    if (r.status === 401) setSignedOut();
-    throw new Error("HTTP " + r.status + (detail ? ": " + detail : ""));
+/* ---- Drive çağrıları ---- */
+async function drive(url,opts){
+  if(!token){expire();throw new Error("Oturum kapalı")}
+  const o=Object.assign({},opts||{});o.headers=Object.assign({Authorization:"Bearer "+token},o.headers||{});
+  let r;
+  try{r=await fetch(url,o)}catch(e){throw new Error("Bağlantı yok")}
+  if(!r.ok){
+    let detail="";try{const j=await r.json();detail=(j.error&&j.error.message)||""}catch(e){}
+    if(r.status===401)expire();
+    const err=new Error("HTTP "+r.status+(detail?": "+detail:""));err.status=r.status;throw err;
   }
   return r;
 }
-const q = s => String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-async function whoAmI() {
-  try {
-    const r = await drive(API + "/about?fields=user(emailAddress)");
-    const j = await r.json(); log("Hesap: " + (j.user && j.user.emailAddress));
-  } catch (e) { log("Hesap bilgisi alınamadı (deneme için sorun değil): " + e.message); }
+const dq=s=>String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+async function listAll(query,fields){
+  const out=[];let page="";
+  do{
+    const r=await drive(API+"/files?spaces=drive&pageSize=1000&fields="+encodeURIComponent("nextPageToken,files("+fields+")")+"&q="+encodeURIComponent(query)+(page?"&pageToken="+encodeURIComponent(page):""));
+    const j=await r.json();out.push(...(j.files||[]));page=j.nextPageToken||"";
+  }while(page);
+  return out;
 }
-async function findOrCreateFolder(name, parentId) {
-  const query = "name='" + q(name) + "' and mimeType='" + FOLDER_MIME + "' and trashed=false and '" + parentId + "' in parents";
-  const r = await drive(API + "/files?spaces=drive&fields=files(id,name)&q=" + encodeURIComponent(query));
-  const j = await r.json();
-  if (j.files && j.files.length) { log("Klasör zaten var: " + name); return j.files[0].id; }
-  const c = await drive(API + "/files?fields=id,name", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] })
-  });
-  const cj = await c.json(); log("Klasör oluşturuldu: " + name); return cj.id;
+async function createFolder(name,parentId){
+  const r=await drive(API+"/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,mimeType:FOLDER_MIME,parents:[parentId]})});
+  return (await r.json()).id;
 }
-async function ensureOrderFolder() {
-  if (orderFolderId) return orderFolderId;
-  const root = await findOrCreateFolder(CFG.rootFolderName || "İthalat Arşivi", "root");
-  const year = await findOrCreateFolder(String(new Date().getFullYear()), root);
-  orderFolderId = await findOrCreateFolder(TEST_ORDER, year);
-  return orderFolderId;
+async function findOrCreateFolder(name,parentId){
+  const f=await listAll("name='"+dq(name)+"' and mimeType='"+FOLDER_MIME+"' and trashed=false and '"+dq(parentId)+"' in parents","id");
+  return f.length?f[0].id:createFolder(name,parentId);
 }
-function multipart(meta, blob, type) {
-  const b = "ithalat" + Math.random().toString(36).slice(2);
-  const body = new Blob([
-    "--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n", JSON.stringify(meta),
-    "\r\n--" + b + "\r\nContent-Type: " + type + "\r\n\r\n", blob, "\r\n--" + b + "--"
-  ]);
-  return { body, headers: { "Content-Type": "multipart/related; boundary=" + b } };
+function multipart(meta,blob,type){
+  const b="ithalat"+uid();
+  return {body:new Blob(["--"+b+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n",JSON.stringify(meta),"\r\n--"+b+"\r\nContent-Type: "+type+"\r\n\r\n",blob,"\r\n--"+b+"--"]),headers:{"Content-Type":"multipart/related; boundary="+b}};
 }
-async function uploadFile(name, blob, type, parentId) {
-  const m = multipart({ name, parents: [parentId] }, blob, type || "application/octet-stream");
-  const r = await drive(UPLOAD + "?uploadType=multipart&fields=id,name,size,mimeType,webViewLink", { method: "POST", headers: m.headers, body: m.body });
+async function createFile(name,parentId,blob,type,fields){
+  const m=multipart({name,parents:[parentId]},blob,type||"application/octet-stream");
+  const r=await drive(UPLOAD+"?uploadType=multipart&fields="+encodeURIComponent(fields||"id,modifiedTime"),{method:"POST",headers:m.headers,body:m.body});
   return r.json();
 }
-
-/* ---- Giriş yöntemleri ---- */
-function loginRedirect() {
-  if (!configured) return log("HATA: config.js içinde istemci kimliği yok.");
-  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  store("ithalat.state", state);
-  const p = new URLSearchParams({ client_id: CFG.clientId, redirect_uri: REDIRECT, response_type: "token", scope: SCOPE, state, include_granted_scopes: "true" });
-  log("Yönlendirme ile giriş başlatılıyor.");
-  location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + p.toString());
+async function updateFile(fileId,blob,type){
+  const r=await drive(UPLOAD+"/"+encodeURIComponent(fileId)+"?uploadType=media&fields=id,modifiedTime",{method:"PATCH",headers:{"Content-Type":type},body:blob});
+  return r.json();
 }
-function loadGis() {
-  return new Promise((res, rej) => {
-    if (window.google && google.accounts && google.accounts.oauth2) return res();
-    const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true;
-    s.onload = () => res(); s.onerror = () => rej(new Error("Google giriş kitaplığı yüklenemedi."));
-    document.head.appendChild(s);
+async function patchMeta(fileId,body){
+  await drive(API+"/files/"+encodeURIComponent(fileId)+"?fields=id",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+}
+async function readJson(fileId){return (await drive(API+"/files/"+encodeURIComponent(fileId)+"?alt=media")).json()}
+
+/* ---- Klasör düzeni: İthalat Arşivi / yıl / sipariş / (Belgeler, Fotoğraflar) ---- */
+const cleanName=s=>String(s).replace(/[\\/:*?"<>|]+/g," ").replace(/\s+/g," ").trim();
+const folderNameOf=o=>cleanName(o.no+" "+o.supplier);
+async function ensureFolders(o){
+  if(o.folderId)return;
+  if(!rootId)rootId=await findOrCreateFolder(CFG.rootFolderName||"İthalat Arşivi","root");
+  const y=String(o.orderDate||today()).slice(0,4);
+  if(!yearIds[y])yearIds[y]=await findOrCreateFolder(y,rootId);
+  o.folderId=await createFolder(folderNameOf(o),yearIds[y]);o.folderName=folderNameOf(o);
+  log("Sipariş klasörü açıldı: "+o.folderName);
+}
+async function ensureSub(o,key,name){
+  if(!o[key]){o[key]=await createFolder(name,o.folderId);o._dirty=true}
+  return o[key];
+}
+function enqueue(id,fn){
+  S.pending++;renderSync();
+  const p=(queues[id]||Promise.resolve()).then(fn).finally(()=>{S.pending--;renderSync()});
+  queues[id]=p.catch(()=>{});
+  return p;
+}
+function bodyOf(o){const b={};for(const k in o){if(k[0]!=="_"&&k!=="fileId")b[k]=o[k]}return b}
+
+/* Kaydetme: önce ekranda ve önbellekte, ardından sırayla Drive'da. */
+function saveOrder(o){
+  o.updatedAt=new Date().toISOString();o._dirty=true;
+  const i=S.orders.findIndex(x=>x.id===o.id);if(i===-1)S.orders.push(o);else S.orders[i]=o;
+  sortOrders();saveCache();render();
+  return pushOrder(o.id);
+}
+function pushOrder(id){
+  if(S.auth!=="in")return Promise.resolve();
+  return enqueue(id,async()=>{
+    const o=getOrder(id);if(!o||!o._dirty)return;
+    await ensureFolders(o);
+    const stamp=o.updatedAt;const blob=new Blob([JSON.stringify(bodyOf(o))],{type:"application/json"});
+    const r=o.fileId?await updateFile(o.fileId,blob,"application/json"):await createFile(DATA_FILE,o.folderId,blob,"application/json");
+    o.fileId=r.id;o._mtime=r.modifiedTime;
+    if(o.updatedAt===stamp)o._dirty=false;
+    if(o.folderName!==folderNameOf(o)){try{await patchMeta(o.folderId,{name:folderNameOf(o)});o.folderName=folderNameOf(o);o._dirty=true;log("Klasör adı güncellendi: "+o.folderName)}catch(e){log("Klasör adı değiştirilemedi: "+e.message)}}
+    S.syncErr="";saveCache();
+    if(o._dirty)setTimeout(()=>pushOrder(id),0);
+  }).catch(e=>{S.syncErr=e.message;log("KAYIT HATASI ("+id+"): "+e.message);saveCache();renderSync()});
+}
+function pushAllDirty(){for(const o of S.orders){if(o._dirty)pushOrder(o.id)}}
+async function removeOrder(o){
+  S.orders=S.orders.filter(x=>x.id!==o.id);S.sel=null;saveCache();location.hash="#siparisler";render();
+  if(o.folderId)enqueue(o.id,()=>patchMeta(o.folderId,{trashed:true})).then(()=>log("Sipariş klasörü Drive çöp kutusuna taşındı: "+o.no)).catch(e=>{log("Silme hatası: "+e.message);toast("Drive'daki klasör silinemedi. Drive'dan elle silebilirsiniz.")});
+}
+function trashFile(orderId,fileId){
+  if(!fileId)return;
+  enqueue(orderId,()=>patchMeta(fileId,{trashed:true})).catch(e=>log("Dosya çöpe taşınamadı: "+e.message));
+}
+
+/* Drive'dan okuma: yalnızca değişen sipariş dosyaları indirilir. */
+async function syncDown(){
+  if(S.auth!=="in"||S.syncing)return;
+  S.syncing=true;renderSync();
+  try{
+    const files=await listAll("name='"+DATA_FILE+"' and trashed=false","id,modifiedTime,parents");
+    const seen=new Set(files.map(f=>f.id));const need=[];
+    for(const f of files){const c=S.orders.find(o=>o.fileId===f.id);if(c&&(c._dirty||c._mtime===f.modifiedTime))continue;need.push(f)}
+    for(let i=0;i<need.length;i+=5){
+      await Promise.all(need.slice(i,i+5).map(async f=>{
+        try{
+          const d=await readJson(f.id);if(!d||!d.id)return;
+          const o=Object.assign(d,{fileId:f.id,_mtime:f.modifiedTime,_dirty:false});
+          if(!o.folderId&&f.parents&&f.parents[0])o.folderId=f.parents[0];
+          const k=S.orders.findIndex(x=>x.id===o.id);if(k===-1)S.orders.push(o);else if(!S.orders[k]._dirty)S.orders[k]=o;
+        }catch(e){log("Sipariş dosyası okunamadı ("+f.id+"): "+e.message)}
+      }));
+    }
+    S.orders=S.orders.filter(o=>o._dirty||!o.fileId||seen.has(o.fileId));
+    sortOrders();S.loaded=true;S.syncErr="";saveCache();
+    log("Drive ile eşitlendi: "+S.orders.length+" sipariş, "+need.length+" dosya indirildi.");
+  }catch(e){S.syncErr=e.message;S.loaded=true;log("EŞİTLEME HATASI: "+e.message)}
+  S.syncing=false;render();
+}
+async function boot(){
+  try{const r=await drive(API+"/about?fields=user(emailAddress)");const j=await r.json();S.email=(j.user&&j.user.emailAddress)||"";ls.set("ithalat.email",S.email);log("Hesap: "+S.email)}catch(e){log("Hesap bilgisi alınamadı: "+e.message)}
+  await syncDown();pushAllDirty();
+}
+
+/* ---- Görsel hazırlama ve yükleme ---- */
+async function prepImage(file){
+  const bmp=await createImageBitmap(file);
+  const draw=max=>{const k=Math.min(1,max/Math.max(bmp.width,bmp.height));const c=document.createElement("canvas");c.width=Math.max(1,Math.round(bmp.width*k));c.height=Math.max(1,Math.round(bmp.height*k));c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);return c};
+  const blob=await new Promise(r=>draw(1800).toBlob(r,"image/jpeg",.86));
+  if(!blob)throw new Error("encode");
+  return {blob,thumb:draw(240).toDataURL("image/jpeg",.6)};
+}
+const extOf=(name,type)=>{const m=/\.([a-z0-9]{2,5})$/i.exec(name||"");if(m)return m[1].toLowerCase();return type==="application/pdf"?"pdf":/^image\/(\w+)/.test(type||"")?RegExp.$1.replace("jpeg","jpg"):"bin"};
+async function addPhotos(files){
+  const o=getOrder(S.sel);if(!o||!files.length)return;
+  if(S.auth!=="in")return toast("Fotoğraf yüklemek için önce giriş yapın.");
+  S.busy=true;render();let ok=0;
+  for(const f of files){
+    if(!/^image\//.test(f.type)){toast("Yalnızca fotoğraf yüklenebilir: "+f.name);continue}
+    let blob=f,type=f.type,thumb="";
+    try{const p=await prepImage(f);blob=p.blob;type="image/jpeg";thumb=p.thumb}catch(e){log("Fotoğraf küçültülemedi, özgün hâliyle yükleniyor: "+f.name)}
+    try{
+      const t0=Date.now();
+      const r=await enqueue(o.id,async()=>{
+        await ensureFolders(o);const parent=await ensureSub(o,"photosFolderId","Fotoğraflar");
+        o.photoSeq=(o.photoSeq||0)+1;
+        const name=cleanName(o.no)+"_foto_"+String(o.photoSeq).padStart(3,"0")+"."+(type==="image/jpeg"?"jpg":extOf(f.name,type));
+        return Object.assign(await createFile(name,parent,blob,type,"id,name"),{name});
+      });
+      (o.photos=o.photos||[]).push({id:r.id,name:r.name,thumb,itemId:"",at:today()});ok++;
+      log("Fotoğraf yüklendi ("+(Date.now()-t0)+" ms, "+Math.round(blob.size/1024)+" KB): "+r.name);
+    }catch(e){log("FOTOĞRAF YÜKLEME HATASI: "+e.message);toast("Yüklenemedi: "+f.name+". "+e.message)}
+  }
+  S.busy=false;if(ok){await saveOrder(o);toast(ok+" fotoğraf eklendi. Kaleme bağlamak için Düzenle'ye dokunun.")}else render();
+}
+async function addDocs(type,files){
+  const o=getOrder(S.sel);if(!o||!files.length)return;
+  if(S.auth!=="in")return toast("Belge yüklemek için önce giriş yapın.");
+  const label=(docTypesFor(o).find(t=>t.k===type)||{l:"Belge"}).l;
+  S.busy=true;render();let ok=0;
+  for(const f of files){
+    const ct=f.type||(/\.pdf$/i.test(f.name)?"application/pdf":"application/octet-stream");
+    try{
+      const r=await enqueue(o.id,async()=>{
+        await ensureFolders(o);const parent=await ensureSub(o,"docsFolderId","Belgeler");
+        const n=(o.docs||[]).filter(d=>d.type===type).length+1;
+        const name=cleanName(o.no+"_"+label.replace(/\s*\/\s*/g,"-"))+(n>1?"_"+n:"")+"."+extOf(f.name,ct);
+        return createFile(name,parent,f,ct,"id,name,webViewLink");
+      });
+      (o.docs=o.docs||[]).push({id:r.id,type,name:r.name,orig:f.name,link:r.webViewLink||"",ct,at:today()});ok++;
+      log("Belge yüklendi: "+r.name);
+    }catch(e){log("BELGE YÜKLEME HATASI: "+e.message);toast("Yüklenemedi: "+f.name+". "+e.message)}
+  }
+  S.busy=false;if(ok)saveOrder(o);else render();
+}
+async function photoUrl(a){
+  if(blobCache.has(a.id))return blobCache.get(a.id);
+  const r=await drive(API+"/files/"+encodeURIComponent(a.id)+"?alt=media");
+  const u=URL.createObjectURL(await r.blob());blobCache.set(a.id,u);return u;
+}
+const linkOf=d=>/^https:\/\//.test(d.link||"")?d.link:"#";
+
+/* ---------- Görünümler ---------- */
+function chipsFor(o,p){
+  let h='<span class="chip '+(o.shipFrom==="CN"?"cn":"it")+'">Sevk: '+esc(COUNTRY[o.shipFrom]||o.shipFrom)+'</span>';
+  if(mixedOrigin(o))h+='<span class="chip cn">Çin menşeli kalem var</span>';
+  if(p.late)h+='<span class="chip crit">Gümrükte '+p.wait+' gün</span>';
+  const m=missingDocs(o).length;
+  if(m&&p.idx>=5)h+='<span class="chip warn">'+m+' belge eksik</span>';
+  if(o.sample)h+='<span class="chip">Örnek veri</span>';
+  return h;
+}
+function stepsHtml(p){return '<div class="steps" aria-hidden="true">'+STAGES.map((s,i)=>'<i class="'+(i<p.idx?"on":i===p.idx?"now":"")+'"></i>').join("")+'</div>'}
+
+function viewList(){
+  const all=S.orders;const ps=new Map(all.map(o=>[o.id,progress(o)]));
+  const open=all.filter(o=>!ps.get(o.id).done);
+  const onWay=open.filter(o=>ps.get(o.id).onWay).length;
+  const inC=open.filter(o=>ps.get(o.id).inCustoms).length;
+  const miss=all.filter(o=>ps.get(o.id).idx>=5&&missingDocs(o).length).length;
+  const q=S.q.trim().toLocaleLowerCase("tr");
+  const rows=all.filter(o=>(S.ship==="all"||o.shipFrom===S.ship)&&(!q||[o.no,o.supplier,o.customs&&o.customs.beyannameNo,...(o.items||[]).map(i=>i.model+" "+i.desc)].join(" ").toLocaleLowerCase("tr").includes(q)));
+  let h='<div class="head"><div><h1>Siparişler</h1><p>Her sipariş bir dosya: kalemler, fotoğraflar, gümrük aşamaları ve belgeler.</p></div><div style="display:flex;gap:8px;align-items:center"><span class="chip" id="syncChip" hidden></span><button class="btn primary" data-act="new-order">Yeni sipariş</button></div></div>';
+  h+=notices();
+  h+='<div class="tiles"><div class="tile"><b>'+open.length+'</b><span>Açık dosya</span></div><div class="tile"><b>'+onWay+'</b><span>Yolda</span></div><div class="tile'+(inC?" alert":"")+'"><b>'+inC+'</b><span>Gümrükte</span></div><div class="tile'+(miss?" alert":"")+'"><b>'+miss+'</b><span>Belgesi eksik</span></div></div>';
+  h+='<div class="filters"><div class="seg" role="group" aria-label="Sevk ülkesi">'+[["all","Tümü"],["IT","İtalya"],["CN","Çin"]].map(([k,l])=>'<button data-act="ship" data-v="'+k+'" aria-pressed="'+(S.ship===k)+'">'+l+'</button>').join("")+'</div><input type="search" id="q" placeholder="Sipariş no, tedarikçi, model, beyanname no" value="'+esc(S.q)+'" aria-label="Siparişlerde ara"></div>';
+  if(!S.loaded){h+='<div class="card empty">'+"Siparişler Drive'dan yükleniyor."+'</div>';return h}
+  if(!all.length){h+='<div class="card empty"><p>Henüz sipariş yok.</p><button class="btn primary" data-act="new-order">İlk siparişi ekle</button></div>';return h}
+  if(!rows.length){h+='<div class="card empty">Bu filtreye uyan sipariş yok.</div>';return h}
+  h+='<div class="list">'+rows.map(o=>{const p=ps.get(o.id);
+    return '<button class="row '+(o.shipFrom==="CN"?"cn":"it")+'" data-act="open" data-id="'+esc(o.id)+'"><div><div class="no">'+esc(o.no)+'</div><div class="sup">'+esc(o.supplier)+'</div><div class="chips">'+chipsFor(o,p)+'</div></div><div>'+stepsHtml(p)+'<div class="small"><b>'+esc(p.status)+'</b>'+(p.wait!=null&&!p.done?' <span class="muted">· '+p.wait+' gündür</span>':"")+'</div><div class="small muted">Sipariş: '+esc(fmtDate(o.orderDate))+' · '+nfi.format(orderQty(o))+' adet</div></div><div class="total">'+esc(money(orderTotal(o),o.currency))+'</div></button>'}).join("")+'</div>';
+  return h;
+}
+function viewOrder(o){
+  const p=progress(o);const miss=missingDocs(o);const types=docTypesFor(o);const reqN=types.filter(t=>t.req).length;
+  const tabs=[["kalemler","Kalemler",(o.items||[]).length],["fotograflar","Fotoğraflar",(o.photos||[]).length],["gumruk","Gümrük",p.idx+"/"+STAGES.length],["belgeler","Belgeler",(reqN-miss.length)+"/"+reqN],["karsilastirma","Karşılaştırma",""]];
+  let h='<a class="back" href="#siparisler">← Siparişler</a>'+notices();
+  h+='<div class="ohead '+(o.shipFrom==="CN"?"cn":"it")+'"><div class="ohead-top"><div><div class="no">'+esc(o.no)+'</div><h1>'+esc(o.supplier)+'</h1><div class="chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px"><span class="chip '+(p.done?"ok":"")+'">'+esc(p.status)+'</span>'+chipsFor(o,p)+'</div></div><div style="display:flex;gap:6px"><button class="btn sm" data-act="edit-order">Düzenle</button><button class="btn sm ghost danger" data-act="del-order">Sil</button></div></div>';
+  h+='<div class="facts"><span>Sipariş tarihi <b>'+esc(fmtDate(o.orderDate))+'</b></span><span>Taşıma <b>'+esc(o.transport||"Belirtilmedi")+'</b></span><span>Toplam <b class="mono">'+esc(money(orderTotal(o),o.currency))+'</b></span><span>Adet <b class="mono">'+nfi.format(orderQty(o))+'</b></span></div></div>';
+  if(mixedOrigin(o))h+='<div class="banner warn"><b>Müşavire sorun:</b> Bu sipariş İtalya\'dan geliyor ama Çin menşeli kalem içeriyor. A.TR olsa bile bu kalemlerde ek vergi ve menşe belgesi gündeme gelebilir. Karar müşavirindir, uygulama yalnızca işaretler.</div>';
+  h+='<div class="tabs" role="tablist">'+tabs.map(([k,l,n])=>'<button role="tab" data-act="tab" data-v="'+k+'" aria-selected="'+(S.tab===k)+'">'+l+(n!==""?'<span class="n">'+esc(n)+'</span>':"")+'</button>').join("")+'</div>';
+  h+=({kalemler:tabItems,fotograflar:tabPhotos,gumruk:tabCustoms,belgeler:tabDocs,karsilastirma:tabCompare}[S.tab]||tabItems)(o,p);
+  return h;
+}
+function originSplit(o){
+  const g={};for(const i of o.items||[]){const k=i.origin||"XX";(g[k]=g[k]||{qty:0,sum:0,n:0});g[k].qty+=Number(i.qty)||0;g[k].sum+=lineTotal(i);g[k].n++}
+  return g;
+}
+function tabItems(o){
+  const g=originSplit(o);
+  let h='<div class="split">'+Object.keys(g).map(k=>'<div class="card"><span class="chip '+(k==="CN"?"cn":k==="IT"?"it":"")+'">'+esc(COUNTRY[k]||k)+' menşeli</span><div style="margin-top:8px"><b>'+esc(money(g[k].sum,o.currency))+'</b></div><div class="small muted">'+g[k].n+' kalem · '+nfi.format(g[k].qty)+' adet</div></div>').join("")+'</div>';
+  h+='<div class="card"><div class="card-h"><h2>Sipariş kalemleri</h2><button class="btn sm primary" data-act="add-item">Kalem ekle</button></div>';
+  if(!(o.items||[]).length)return h+'<div class="empty">Henüz kalem yok. Showroom\'da seçtiğiniz her modeli ayrı kalem olarak ekleyin.</div></div>';
+  h+='<div class="scroll"><table class="items"><thead><tr><th>Model</th><th>Tanım</th><th>Menşe</th><th class="num">Adet</th><th class="num">Birim fiyat</th><th class="num">Tutar</th><th></th></tr></thead><tbody>';
+  for(const i of o.items){const ph=(o.photos||[]).filter(x=>x.itemId===i.id).length;
+    h+='<tr><td class="mono">'+esc(i.model)+'</td><td>'+esc(i.desc)+'<div class="small muted">'+esc([i.color,i.sizes].filter(Boolean).join(" · "))+(ph?' · '+ph+' fotoğraf':"")+(i.gtip?' · GTİP '+esc(i.gtip):"")+'</div></td><td data-l="Menşe"><span class="chip '+(i.origin==="CN"?"cn":i.origin==="IT"?"it":"")+'">'+esc(COUNTRY[i.origin]||i.origin||"Belirsiz")+'</span></td><td class="num mono" data-l="Adet">'+nfi.format(i.qty||0)+'</td><td class="num mono" data-l="Birim fiyat">'+nf.format(i.price||0)+'</td><td class="num mono" data-l="Tutar">'+nf.format(lineTotal(i))+'</td><td class="num"><button class="btn sm ghost" data-act="edit-item" data-id="'+esc(i.id)+'">Düzenle</button></td></tr>'}
+  h+='</tbody><tfoot><tr><td colspan="3">Toplam</td><td class="num mono" data-l="Adet">'+nfi.format(orderQty(o))+'</td><td></td><td class="num mono" data-l="Tutar">'+esc(money(orderTotal(o),o.currency))+'</td><td></td></tr></tfoot></table></div></div>';
+  return h;
+}
+function tabPhotos(o){
+  let h='<div class="card"><div class="card-h"><h2>Ürün fotoğrafları</h2><label class="btn sm primary filebtn">Fotoğraf yükle<input type="file" id="photoInput" accept="image/*" multiple></label></div>';
+  h+='<div class="small muted" style="margin-bottom:10px">Telefonda bu düğme kamerayı ya da galeriyi açar. Fotoğraflar küçültülerek Drive\'daki sipariş klasörüne yüklenir.</div>';
+  if(S.busy)h+='<div class="banner info">Yükleniyor, sayfayı kapatmayın.</div>';
+  const ph=o.photos||[];
+  if(!ph.length)return h+'<div class="drop" id="drop">Henüz fotoğraf yok. Bilgisayarda dosyaları buraya sürükleyebilirsiniz.</div></div>';
+  h+='<div class="photos" id="drop">'+ph.map((a,n)=>{const it=(o.items||[]).find(i=>i.id===a.itemId);
+    return '<figure class="photo" style="margin:0"><button class="view" data-act="view-photo" data-n="'+n+'" aria-label="Fotoğrafı büyüt"><img loading="lazy" alt="'+esc(it?it.model+" "+it.desc:"Ürün fotoğrafı")+'" src="'+esc(a.thumb||PLACEHOLDER)+'"></button><figcaption class="cap"><span>'+esc(it?it.model:"Kalem seçilmedi")+'</span><button class="btn sm ghost" data-act="photo-menu" data-n="'+n+'">Düzenle</button></figcaption></figure>'}).join("")+'</div></div>';
+  return h;
+}
+function tabCustoms(o,p){
+  const s=o.stages||{};const c=o.customs||{};
+  let h='<div class="card"><div class="card-h"><h2>Aşamalar</h2><span class="small muted">'+(o.shipFrom==="CN"?"Çin, denizyolu akışı":"İtalya, karayolu akışı")+'</span></div><ol class="timeline">';
+  STAGES.forEach((st,i)=>{const d=s[st.k];const cls=d?"done":i===p.idx?"now":"pending";
+    h+='<li class="'+cls+'"><span class="dot"></span><div><div class="lab">'+esc(stageLabel(st,o))+'</div>'+(i===p.idx&&p.wait!=null?'<div class="small muted">'+p.wait+' gündür bekliyor</div>':"")+'</div><div class="ctl"><input type="date" id="st-'+st.k+'" data-stage="'+st.k+'" value="'+esc(d||"")+'" aria-label="'+esc(stageLabel(st,o))+' tarihi">'+(d?"":'<button class="btn sm" data-act="stage-today" data-v="'+st.k+'">Bugün</button>')+'</div></li>'});
+  h+='</ol></div>';
+  if(p.late)h+='<div class="banner crit">Mal '+p.wait+' gündür gümrükte. Bekleme süresi ve ardiye masrafı için müşaviri arayın.</div>';
+  h+='<div class="card"><div class="card-h"><h2>Gümrük bilgileri</h2><span class="small muted">Müşavirden geldikçe elle girilir</span></div><div class="fields">'
+    +'<label class="f">Beyanname tescil no<input type="text" class="mono" id="c-beyannameNo" data-c="beyannameNo" value="'+esc(c.beyannameNo||"")+'"></label>'
+    +'<label class="f">Gümrük müşaviri<input type="text" id="c-musavir" data-c="musavir" value="'+esc(c.musavir||"")+'"></label>'
+    +'<label class="f">'+(o.shipFrom==="CN"?"Konteyner / konşimento no":"Araç plakası / CMR no")+'<input type="text" id="c-arac" data-c="arac" value="'+esc(c.arac||"")+'"></label>'
+    +'<label class="f wide">Not<textarea id="c-not" data-c="not">'+esc(c.not||"")+'</textarea></label></div></div>';
+  return h;
+}
+function tabDocs(o){
+  const types=docTypesFor(o);const docs=o.docs||[];
+  let h='<div class="card"><div class="card-h"><h2>Dosya belgeleri</h2><span class="small muted">PDF ya da fotoğraf, Drive\'a yüklenir</span></div>';
+  if(S.busy)h+='<div class="banner info">Yükleniyor, sayfayı kapatmayın.</div>';
+  h+='<ul class="doclist">';
+  for(const t of types){const mine=docs.map((d,n)=>({d,n})).filter(x=>x.d.type===t.k);
+    h+='<li><div style="min-width:0;flex:1 1 220px"><div><b style="font-weight:500">'+esc(t.l)+'</b> '+(mine.length?'<span class="chip ok">Var</span>':t.req?'<span class="chip warn">Eksik</span>':'<span class="chip">İsteğe bağlı</span>')+'</div>'+(t.hint?'<div class="small muted">'+esc(t.hint)+'</div>':"")
+      +'<div class="files">'+mine.map(x=>'<span><a href="'+esc(linkOf(x.d))+'" target="_blank" rel="noopener">'+esc(x.d.name||"Dosya")+'</a> <span class="muted">· '+esc(fmtDate(x.d.at))+'</span> <button class="btn sm ghost danger" data-act="del-doc" data-n="'+x.n+'">Sil</button></span>').join("")+'</div></div>'
+      +'<label class="btn sm filebtn">Yükle<input type="file" data-doc="'+t.k+'" accept="application/pdf,image/*" multiple aria-label="'+esc(t.l)+' yükle"></label></li>'}
+  return h+'</ul></div>';
+}
+function tabCompare(o){
+  const g=originSplit(o);const keys=Object.keys(g);
+  let h='<div class="banner info">Bu ekran örnek dosya geldikten sonra tamamlanacak. Şimdilik yalnızca sipariş sütunu dolu: proforma, ticari fatura, beyanname ve teslim alınan sütunları gerçek belgelerin biçimine göre kurulacak.</div>';
+  h+='<div class="card"><div class="card-h"><h2>Tutar karşılaştırması ('+esc(o.currency)+')</h2></div><div class="scroll"><table><thead><tr><th>Menşe</th><th class="num">Sipariş</th><th class="num">Proforma</th><th class="num">Ticari fatura</th><th class="num">Beyanname</th><th class="num">Teslim alınan</th></tr></thead><tbody>';
+  for(const k of keys)h+='<tr><td>'+esc(COUNTRY[k]||k)+'</td><td class="num mono">'+nf.format(g[k].sum)+'</td>'+'<td class="num muted">bekliyor</td>'.repeat(4)+'</tr>';
+  h+='</tbody><tfoot><tr><td>Toplam</td><td class="num mono">'+nf.format(orderTotal(o))+'</td>'+'<td class="num muted">bekliyor</td>'.repeat(4)+'</tr></tfoot></table></div></div>';
+  h+='<div class="card"><h2 style="margin-bottom:6px">Planlanan</h2><ul class="small" style="margin:0;padding-left:18px"><li>Kalem bazında adet ve fiyat farkı işaretleme</li><li>Vergi, navlun ve müşavir masrafıyla parça başı maliyet</li><li>İtalya ve Çin menşeli kalemler için ayrı maliyet</li></ul></div>';
+  return h;
+}
+function viewArchive(){
+  const q=S.aq.trim().toLocaleLowerCase("tr");const rows=[];
+  for(const o of S.orders){const lab=Object.fromEntries(docTypesFor(o).map(t=>[t.k,t.l]));
+    for(const d of o.docs||[])rows.push({o,d,l:lab[d.type]||"Diğer"})}
+  rows.sort((a,b)=>String(b.d.at||"").localeCompare(String(a.d.at||"")));
+  const f=rows.filter(r=>!q||[r.l,r.d.name,r.o.no,r.o.supplier,r.o.customs&&r.o.customs.beyannameNo].join(" ").toLocaleLowerCase("tr").includes(q));
+  let h='<div class="head"><div><h1>Belge arşivi</h1><p>Bütün dosyalardaki belgeler tek listede. Gümrük belgelerini beş yıl saklamanız gerekir.</p></div></div>'+notices();
+  h+='<div class="filters"><input type="search" id="aq" placeholder="Belge türü, sipariş no, tedarikçi, beyanname no" value="'+esc(S.aq)+'" aria-label="Arşivde ara"></div>';
+  const missO=S.orders.filter(o=>progress(o).idx>=5&&missingDocs(o).length);
+  if(missO.length)h+='<div class="card"><h2 style="margin-bottom:8px">Eksik belgesi olan dosyalar</h2><ul class="doclist">'+missO.map(o=>'<li><div style="min-width:0;flex:1 1 240px"><b class="mono" style="font-weight:500">'+esc(o.no)+'</b> '+esc(o.supplier)+'<div class="small muted">'+esc(missingDocs(o).map(t=>t.l).join(", "))+'</div></div><button class="btn sm" data-act="open-docs" data-id="'+esc(o.id)+'">Dosyayı aç</button></li>').join("")+'</ul></div>';
+  if(!rows.length)return h+'<div class="card empty">Arşivde henüz belge yok. Belgeler, sipariş dosyasının Belgeler sekmesinden yüklenir.</div>';
+  if(!f.length)return h+'<div class="card empty">Aramaya uyan belge yok.</div>';
+  h+='<div class="card"><div class="scroll"><table><thead><tr><th>Belge</th><th>Sipariş</th><th>Tedarikçi</th><th>Beyanname no</th><th>Yüklenme</th></tr></thead><tbody>'+f.map(r=>'<tr><td><a href="'+esc(linkOf(r.d))+'" target="_blank" rel="noopener" style="color:var(--accent)">'+esc(r.l)+'</a><div class="small muted">'+esc(r.d.name||"")+'</div></td><td class="mono">'+esc(r.o.no)+'</td><td>'+esc(r.o.supplier)+'</td><td class="mono">'+esc((r.o.customs&&r.o.customs.beyannameNo)||"")+'</td><td class="mono">'+esc(fmtDate(r.d.at))+'</td></tr>').join("")+'</tbody></table></div></div>';
+  return h;
+}
+
+/* ---------- Diyaloglar ---------- */
+function closeLayer(){$("#layer").innerHTML="";if(closeLayer.back)try{closeLayer.back.focus()}catch(e){}}
+function dialog(html,onSubmit){
+  closeLayer.back=document.activeElement;
+  $("#layer").innerHTML='<div class="layer" data-act="layer-bg"><form class="dialog" role="dialog" aria-modal="true" novalidate>'+html+'</form></div>';
+  const f=$("#layer form");
+  f.addEventListener("submit",e=>{e.preventDefault();if(onSubmit){const r=onSubmit(Object.fromEntries(new FormData(f)),f);if(r===false)return}closeLayer()});
+  const first=f.querySelector("input,select,textarea,button");if(first)first.focus();
+}
+function confirmBox(title,text,label,fn){
+  dialog('<h2>'+esc(title)+'</h2><p>'+esc(text)+'</p><div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">'+esc(label)+'</button></div>',()=>{fn()});
+}
+function nextNo(ship,date){
+  const y=(date||today()).slice(0,4);const pre=y+"-"+ship+"-";
+  const n=S.orders.filter(o=>String(o.no).startsWith(pre)).map(o=>parseInt(String(o.no).slice(pre.length),10)||0).reduce((a,b)=>Math.max(a,b),0);
+  return pre+String(n+1).padStart(3,"0");
+}
+function orderDialog(o){
+  const isNew=!o;const d=o||{shipFrom:"IT",currency:"EUR",orderDate:today(),transport:"Karayolu (TIR)",supplier:"",no:""};
+  dialog('<h2>'+(isNew?"Yeni sipariş":"Siparişi düzenle")+'</h2><div class="fields">'
+    +'<label class="f wide">Tedarikçi<input type="text" name="supplier" id="d-supplier" required value="'+esc(d.supplier)+'"></label>'
+    +'<label class="f">Sevk ülkesi<select name="shipFrom" id="d-ship"><option value="IT"'+(d.shipFrom==="IT"?" selected":"")+'>İtalya</option><option value="CN"'+(d.shipFrom==="CN"?" selected":"")+'>Çin</option></select></label>'
+    +'<label class="f">Para birimi<select name="currency" id="d-cur">'+["EUR","USD","TRY"].map(c=>'<option'+(d.currency===c?" selected":"")+'>'+c+'</option>').join("")+'</select></label>'
+    +'<label class="f">Sipariş tarihi<input type="date" name="orderDate" id="d-date" value="'+esc(d.orderDate)+'"></label>'
+    +'<label class="f">Taşıma<select name="transport" id="d-tr">'+["Karayolu (TIR)","Denizyolu (konteyner)","Havayolu","Kargo / kurye"].map(c=>'<option'+(d.transport===c?" selected":"")+'>'+c+'</option>').join("")+'</select></label>'
+    +'<label class="f wide">Sipariş no<input type="text" class="mono" name="no" id="d-no" value="'+esc(d.no)+'" placeholder="Boş bırakırsanız otomatik verilir"></label>'
+    +'</div><p class="small muted" style="margin:10px 0 0">Sevk ülkesi malın geldiği yerdir. Üretildiği yeri (menşe) her kalemde ayrı seçersiniz.</p>'
+    +'<div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">'+(isNew?"Dosyayı aç":"Kaydet")+'</button></div>',
+  v=>{
+    if(!v.supplier.trim()){toast("Tedarikçi adını yazın.");return false}
+    if(isNew){
+      const id=uid();
+      const n={id,no:v.no.trim()||nextNo(v.shipFrom,v.orderDate),supplier:v.supplier.trim(),shipFrom:v.shipFrom,currency:v.currency,transport:v.transport,orderDate:v.orderDate||today(),stages:{siparis:v.orderDate||today()},customs:{},items:[],photos:[],docs:[],createdAt:new Date().toISOString()};
+      S.sel=id;S.tab="kalemler";remember();saveOrder(n);location.hash="#dosya";
+    }else{
+      Object.assign(o,{supplier:v.supplier.trim(),shipFrom:v.shipFrom,currency:v.currency,transport:v.transport,orderDate:v.orderDate,no:v.no.trim()||o.no});saveOrder(o);
+    }
+  });
+  if(isNew){const ship=$("#d-ship"),tr=$("#d-tr"),cur=$("#d-cur");ship.addEventListener("change",()=>{if(ship.value==="CN"){tr.value="Denizyolu (konteyner)";cur.value="USD"}else{tr.value="Karayolu (TIR)";cur.value="EUR"}})}
+}
+function itemDialog(o,item){
+  const isNew=!item;const d=item||{model:"",desc:"",color:"",sizes:"",qty:"",price:"",origin:o.shipFrom==="CN"?"CN":"IT",gtip:""};
+  dialog('<h2>'+(isNew?"Kalem ekle":"Kalemi düzenle")+'</h2><div class="fields">'
+    +'<label class="f">Model kodu<input type="text" class="mono" name="model" id="i-model" value="'+esc(d.model)+'"></label>'
+    +'<label class="f">Menşe (üretildiği ülke)<select name="origin" id="i-origin">'+Object.keys(COUNTRY).map(k=>'<option value="'+k+'"'+(d.origin===k?" selected":"")+'>'+COUNTRY[k]+'</option>').join("")+'</select></label>'
+    +'<label class="f wide">Tanım<input type="text" name="desc" id="i-desc" required value="'+esc(d.desc)+'"></label>'
+    +'<label class="f">Renk<input type="text" name="color" id="i-color" value="'+esc(d.color)+'"></label>'
+    +'<label class="f">Beden dağılımı<input type="text" name="sizes" id="i-sizes" value="'+esc(d.sizes)+'" placeholder="S-M-L 2-3-2"></label>'
+    +'<label class="f">Adet<input type="number" name="qty" id="i-qty" min="0" step="1" inputmode="numeric" value="'+esc(d.qty)+'"></label>'
+    +'<label class="f">Birim fiyat ('+esc(o.currency)+')<input type="number" name="price" id="i-price" min="0" step="0.01" inputmode="decimal" value="'+esc(d.price)+'"></label>'
+    +'<label class="f wide">GTİP (müşavirden, isteğe bağlı)<input type="text" class="mono" name="gtip" id="i-gtip" value="'+esc(d.gtip||"")+'"></label>'
+    +'</div><div class="acts">'+(isNew?"":'<button type="button" class="btn ghost danger" data-act="del-item" data-id="'+esc(d.id)+'" style="margin-right:auto">Kalemi sil</button>')+'<button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div>',
+  v=>{
+    if(!v.desc.trim()&&!v.model.trim()){toast("Model kodu ya da tanım yazın.");return false}
+    const rec={model:v.model.trim(),desc:v.desc.trim(),color:v.color.trim(),sizes:v.sizes.trim(),qty:Number(v.qty)||0,price:Number(String(v.price).replace(",","."))||0,origin:v.origin,gtip:v.gtip.trim()};
+    o.items=o.items||[];
+    if(isNew)o.items.push(Object.assign({id:uid()},rec));else Object.assign(item,rec);
+    saveOrder(o);
   });
 }
-async function loginPopup() {
-  if (!configured) return log("HATA: config.js içinde istemci kimliği yok.");
-  try {
-    await loadGis();
-    if (!gisClient) gisClient = google.accounts.oauth2.initTokenClient({
-      client_id: CFG.clientId, scope: SCOPE,
-      callback: resp => {
-        if (resp && resp.access_token) setSignedIn(resp.access_token, resp.expires_in, "açılır pencere");
-        else { pill("s1", "crit", "Başarısız"); log("Açılır pencere girişi reddedildi:", resp); }
-      },
-      error_callback: err => { pill("s1", "crit", "Başarısız"); log("Açılır pencere hatası:", { type: err && err.type, message: err && err.message }); }
-    });
-    log("Açılır pencere ile giriş başlatılıyor.");
-    gisClient.requestAccessToken();
-  } catch (e) { pill("s1", "crit", "Başarısız"); log("HATA: " + e.message); }
+function photoDialog(o,n){
+  const a=o.photos[n];if(!a)return;
+  dialog('<h2>Fotoğraf</h2><label class="f">Hangi kaleme ait?<select name="itemId" id="p-item"><option value="">Kalem seçilmedi</option>'+(o.items||[]).map(i=>'<option value="'+esc(i.id)+'"'+(a.itemId===i.id?" selected":"")+'>'+esc(i.model+" "+i.desc)+'</option>').join("")+'</select></label>'
+    +'<div class="acts"><button type="button" class="btn ghost danger" data-act="del-photo" data-n="'+n+'" style="margin-right:auto">Fotoğrafı sil</button><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div>',
+  v=>{a.itemId=v.itemId;saveOrder(o)});
 }
-function handleRedirectReturn() {
-  if (!location.hash || location.hash.length < 2) return false;
-  const h = new URLSearchParams(location.hash.slice(1));
-  if (!h.has("access_token") && !h.has("error")) return false;
-  history.replaceState(null, "", location.pathname + location.search);
-  if (h.has("error")) { pill("s1", "crit", "Başarısız"); log("Yönlendirme girişi hata döndü: " + h.get("error")); return true; }
-  const expected = load("ithalat.state");
-  store("ithalat.state", null);
-  if (!expected || expected !== h.get("state")) {
-    pill("s1", "crit", "Başarısız");
-    log("UYARI: Dönüşte güvenlik değeri (state) eşleşmedi. Bu, girişin başka bir pencerede ya da tarayıcıda tamamlandığını gösterir. Belirteç kullanılmadı.");
-    return true;
-  }
-  setSignedIn(h.get("access_token"), h.get("expires_in"), "yönlendirme");
-  return true;
+/* ---------- Olaylar ---------- */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act]");if(!t)return;const a=t.dataset.act;const o=getOrder(S.sel);
+  if(a==="layer-bg"){if(e.target===t)closeLayer();return}
+  if(a==="close"){closeLayer();return}
+  if(globalAction(a,t,e))return;
+  if(a==="ship"){S.ship=t.dataset.v;render();return}
+  if(a==="open"||a==="open-docs"){S.sel=t.dataset.id;if(a==="open-docs")S.tab="belgeler";remember();if(location.hash==="#dosya")route();else location.hash="#dosya";return}
+  if(!o)return;
+  if(a==="tab"){S.tab=t.dataset.v;remember();render();return}
+  if(a==="edit-order"){orderDialog(o);return}
+  if(a==="del-order"){confirmBox("Dosya silinsin mi?",o.no+" numaralı sipariş, fotoğrafları ve belgeleriyle birlikte Drive'da çöp kutusuna taşınır.","Dosyayı sil",()=>removeOrder(o));return}
+  if(a==="add-item"){itemDialog(o,null);return}
+  if(a==="edit-item"){itemDialog(o,(o.items||[]).find(i=>i.id===t.dataset.id));return}
+  if(a==="del-item"){o.items=(o.items||[]).filter(i=>i.id!==t.dataset.id);(o.photos||[]).forEach(p=>{if(p.itemId===t.dataset.id)p.itemId=""});closeLayer();saveOrder(o);return}
+  if(a==="stage-today"){o.stages=o.stages||{};o.stages[t.dataset.v]=today();saveOrder(o);return}
+  if(a==="view-photo"){lightbox(o,Number(t.dataset.n));return}
+  if(a==="photo-menu"){photoDialog(o,Number(t.dataset.n));return}
+  if(a==="del-photo"){const n=Number(t.dataset.n);const ph=o.photos[n];closeLayer();o.photos.splice(n,1);saveOrder(o);trashFile(o.id,ph&&ph.id);return}
+  if(a==="del-doc"){const n=Number(t.dataset.n);const d=o.docs[n];if(!d)return;confirmBox("Belge silinsin mi?",(d.name||"Dosya")+" Drive'da çöp kutusuna taşınır.","Belgeyi sil",()=>{o.docs.splice(n,1);saveOrder(o);trashFile(o.id,d.id)});return}
+});
+document.addEventListener("change",e=>{
+  const t=e.target;const o=getOrder(S.sel);
+  if(t.id==="photoInput"){addPhotos([...t.files]);return}
+  if(t.dataset&&t.dataset.doc){addDocs(t.dataset.doc,[...t.files]);return}
+  if(!o)return;
+  if(t.dataset&&t.dataset.stage){o.stages=o.stages||{};if(t.value)o.stages[t.dataset.stage]=t.value;else delete o.stages[t.dataset.stage];saveOrder(o);return}
+  if(t.dataset&&t.dataset.c){o.customs=o.customs||{};if(o.customs[t.dataset.c]!==t.value){o.customs[t.dataset.c]=t.value;saveOrder(o)}return}
+});
+document.addEventListener("input",e=>{
+  if(e.target.id==="q"){S.q=e.target.value;render()}
+  if(e.target.id==="aq"){S.aq=e.target.value;render()}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#layer").firstChild)closeLayer()});
+document.addEventListener("dragover",e=>{const d=e.target.closest&&e.target.closest("#drop");if(d){e.preventDefault();d.classList.add("over")}});
+document.addEventListener("dragleave",e=>{const d=e.target.closest&&e.target.closest("#drop");if(d)d.classList.remove("over")});
+document.addEventListener("drop",e=>{const d=e.target.closest&&e.target.closest("#drop");if(d){e.preventDefault();addPhotos([...e.dataTransfer.files])}});
+
+/* ---------- Oturum ekranları, durum çubuğu, yönlendirme ---------- */
+function loginButtons(){
+  return '<div style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn primary" data-act="login-popup">Google ile giriş yap</button><button class="btn" data-act="login-redirect">Diğer giriş yöntemi</button></div>';
+}
+function notices(){
+  let h="";
+  if(S.auth==="expired")h+='<div class="banner warn"><b>Oturum süresi doldu.</b> Gördükleriniz bu cihazdaki son kopya. Değişiklikler girişten sonra Drive\'a gönderilir.<div style="margin-top:8px">'+loginButtons()+'</div></div>';
+  if(S.syncErr&&S.auth==="in")h+='<div class="banner crit"><b>Drive\'a kaydedilemedi:</b> '+esc(S.syncErr)+'. Değişiklikleriniz bu cihazda bekliyor.<div style="margin-top:8px"><button class="btn sm" data-act="retry-sync">Yeniden dene</button></div></div>';
+  return h;
+}
+function viewLogin(){
+  let h='<div class="head"><div><h1>İthalat Dosyaları</h1><p>İtalya ve Çin siparişleri için sipariş, gümrük ve belge takibi.</p></div></div>';
+  if(S.loginErr)h+='<div class="banner crit">'+esc(S.loginErr)+'</div>';
+  if(!configured)return h+'<div class="banner crit">Kurulum tamamlanmamış: config.js dosyasında istemci kimliği tanımlı değil.</div>';
+  h+='<div class="card"><h2 style="margin-bottom:6px">Google hesabınızla giriş yapın</h2><p class="muted" style="margin:0 0 12px">Siparişleriniz ve belgeleriniz kendi Google Drive\'ınızda, <b>'+esc(CFG.rootFolderName||"İthalat Arşivi")+'</b> klasöründe saklanır. Uygulama yalnızca kendi oluşturduğu dosyaları görür, Drive\'ınızdaki diğer dosyalara erişmez.</p>'+loginButtons()+'<p class="small muted" style="margin:12px 0 0">Giriş penceresi açılmazsa ya da geri dönmezse "Diğer giriş yöntemi" düğmesini deneyin.</p></div>';
+  return h;
+}
+function viewAccount(){
+  const dirty=S.orders.filter(o=>o._dirty).length;
+  let h='<div class="head"><div><h1>Hesap ve tanılama</h1><p>Oturum, eşitleme durumu ve sorun bildirirken göndereceğiniz günlük.</p></div></div>'+notices();
+  h+='<div class="card"><div class="card-h"><h2>Oturum</h2>'+(S.auth==="in"?'<span class="chip ok">Giriş yapıldı</span>':S.auth==="expired"?'<span class="chip warn">Süresi doldu</span>':'<span class="chip">Kapalı</span>')+'</div><div class="facts" style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13.5px;color:var(--muted)"><span>Hesap <b style="color:var(--ink);font-weight:500">'+esc(S.email||"Bilinmiyor")+'</b></span><span>Çalışma biçimi <b style="color:var(--ink);font-weight:500">'+(standalone?"Ana ekran uygulaması":"Tarayıcı sekmesi")+'</b></span><span>Gönderilmeyi bekleyen <b style="color:var(--ink);font-weight:500">'+dirty+' sipariş</b></span></div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">'+(S.auth==="in"?'<button class="btn sm" data-act="refresh">Drive ile eşitle</button>':"")+(S.auth!=="out"?'<button class="btn sm ghost danger" data-act="logout">Çıkış yap</button>':"")+'</div>'+(dirty&&S.auth!=="out"?'<p class="small muted" style="margin:10px 0 0">Çıkış yaparsanız gönderilmemiş değişiklikler bu cihazdan silinir.</p>':"")+'</div>';
+  h+='<div class="card"><div class="card-h"><h2>Günlük</h2><button class="btn sm" data-act="copy-log">Günlüğü kopyala</button></div><pre id="logBox" class="mono" style="margin:0;background:var(--sunk);border-radius:8px;padding:10px;max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px">'+esc(LOG.join("\n"))+'</pre></div>';
+  h+='<div class="card small muted">Sürüm '+APP_VERSION+' · Yönlendirme adresi: <span class="mono">'+esc(REDIRECT)+'</span></div>';
+  return h;
+}
+function syncText(){
+  if(S.auth==="out")return "";
+  if(S.auth==="expired")return "Oturum süresi doldu";
+  if(S.pending>0||S.syncing)return "Drive'a kaydediliyor";
+  if(S.syncErr)return "Kaydedilemedi";
+  if(S.orders.some(o=>o._dirty))return "Gönderilmeyi bekliyor";
+  return "Drive'a kaydedildi";
+}
+function renderSync(){
+  const t=syncText();const f=$("#railFoot");
+  if(f){f.textContent="";if(S.email&&S.auth!=="out"){const e=document.createElement("div");e.textContent=S.email;e.style.overflowWrap="anywhere";f.appendChild(e)}const s=document.createElement("div");s.textContent=t;f.appendChild(s)}
+  const m=$("#syncChip");if(m){m.textContent=t;m.hidden=!t;m.className="chip"+(S.syncErr&&S.auth==="in"?" crit":S.auth==="expired"?" warn":"")}
+}
+function render(){
+  const ae=document.activeElement;const fid=ae&&ae.id&&$("#main").contains(ae)?ae.id:null;
+  let ss0=null,se0=null;try{if(fid&&ae.selectionStart!=null){ss0=ae.selectionStart;se0=ae.selectionEnd}}catch(e){}
+  let o=S.view==="dosya"?getOrder(S.sel):null;
+  if(S.view==="dosya"&&!o&&S.loaded){S.view="siparisler"}
+  let html;
+  if(S.view==="hesap")html=viewAccount();
+  else if(S.auth==="out")html=viewLogin();
+  else html=S.view==="arsiv"?viewArchive():(S.view==="dosya"&&o)?viewOrder(o):viewList();
+  $("#main").innerHTML=html;
+  const navKey=S.view==="arsiv"?"arsiv":S.view==="hesap"?"hesap":"siparisler";
+  document.querySelectorAll("[data-nav]").forEach(a=>{if(a.dataset.nav===navKey)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
+  const shown=S.auth!=="out"&&S.loaded;
+  $("#navCount").textContent=shown?S.orders.length:"";
+  $("#navDocs").textContent=shown?S.orders.reduce((s,x)=>s+(x.docs||[]).length,0):"";
+  renderSync();
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(ss0!=null)el.setSelectionRange(ss0,se0)}catch(e){}}}
+}
+function route(){
+  const h=(location.hash||"#siparisler").slice(1);
+  S.view=h==="arsiv"?"arsiv":h==="dosya"?"dosya":h==="hesap"?"hesap":"siparisler";
+  render();window.scrollTo(0,0);
+}
+async function lightbox(o,n){
+  const a=o.photos[n];if(!a)return;closeLayer.back=document.activeElement;
+  $("#layer").innerHTML='<div class="layer lightbox" data-act="layer-bg"><div style="max-width:100%;text-align:center"><img id="lbImg" alt="Ürün fotoğrafı" src="'+esc(a.thumb||"")+'" style="min-width:160px"><div id="lbNote" class="small" style="color:#fff;margin-top:8px">Tam boyut Drive\'dan yükleniyor.</div><div style="margin-top:10px"><button class="btn" data-act="close">Kapat</button></div></div></div>';
+  $("#layer button").focus();
+  try{const u=await photoUrl(a);const im=$("#lbImg");if(im){im.src=u;$("#lbNote").textContent=a.name||""}}
+  catch(e){const nt=$("#lbNote");if(nt)nt.textContent="Tam boyut yüklenemedi: "+e.message}
+}
+async function copyLog(btn){
+  const txt=LOG.join("\n");
+  try{await navigator.clipboard.writeText(txt);btn.textContent="Kopyalandı"}
+  catch(e){const b=$("#logBox");if(b){const r=document.createRange();r.selectNodeContents(b);const s=getSelection();s.removeAllRanges();s.addRange(r)}btn.textContent="Seçildi, elle kopyalayın"}
+  setTimeout(()=>{btn.textContent="Günlüğü kopyala"},2500);
+}
+function globalAction(a,t,e){
+  if(a==="login-popup"){loginPopup();return true}
+  if(a==="login-redirect"){loginRedirect();return true}
+  if(a==="logout"){confirmBox("Çıkış yapılsın mı?","Bu cihazdaki kopya silinir. Drive'daki siparişleriniz ve belgeleriniz yerinde kalır.","Çıkış yap",()=>signOut());return true}
+  if(a==="retry-sync"){S.syncErr="";pushAllDirty();syncDown();return true}
+  if(a==="refresh"){syncDown().then(()=>pushAllDirty());return true}
+  if(a==="copy-log"){copyLog(t);return true}
+  if(a==="new-order"){e.preventDefault();if(S.auth==="out"){toast("Önce giriş yapın.");return true}orderDialog(null);return true}
+  return false;
 }
 
-/* ---- Adımlar ---- */
-$("btnPopup").addEventListener("click", loginPopup);
-$("btnRedirect").addEventListener("click", loginRedirect);
-$("btnOut").addEventListener("click", () => { setSignedOut(); orderFolderId = null; log("Çıkış yapıldı (bu cihazdaki belirteç silindi)."); });
-$("btnFolder").addEventListener("click", async () => {
-  pill("s2", "warn", "Çalışıyor");
-  try { const id = await ensureOrderFolder(); pill("s2", "ok", "Tamam"); log("KLASÖR ADIMI BAŞARILI, kimlik: " + id); }
-  catch (e) { pill("s2", "crit", "Başarısız"); log("KLASÖR ADIMI HATA: " + e.message); }
-});
-$("file").addEventListener("change", async ev => {
-  const f = ev.target.files && ev.target.files[0]; if (!f) return;
-  pill("s3", "warn", "Yükleniyor");
-  log("Dosya seçildi: " + f.name + ", tür: " + (f.type || "bilinmiyor") + ", boyut: " + Math.round(f.size / 1024) + " KB");
-  try {
-    const parent = await ensureOrderFolder();
-    const t0 = Date.now();
-    const j = await uploadFile(f.name, f, f.type, parent);
-    pill("s3", "ok", "Tamam");
-    log("YÜKLEME BAŞARILI (" + (Date.now() - t0) + " ms):", j);
-    const out = $("upOut"); out.textContent = "";
-    if (j.webViewLink && /^https:\/\//.test(j.webViewLink)) {
-      const a = document.createElement("a"); a.href = j.webViewLink; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Drive'da aç";
-      out.appendChild(a);
-    }
-    if (/^image\//.test(f.type)) { const im = document.createElement("img"); im.className = "thumb"; im.alt = "Yüklenen fotoğraf"; im.src = URL.createObjectURL(f); out.appendChild(document.createElement("br")); out.appendChild(im); }
-  } catch (e) { pill("s3", "crit", "Başarısız"); log("YÜKLEME HATA: " + e.message); }
-  ev.target.value = "";
-});
-$("btnData").addEventListener("click", async () => {
-  pill("s4", "warn", "Çalışıyor");
-  try {
-    const parent = await ensureOrderFolder();
-    const sample = { no: "DENEME-001", tedarikci: "Örnek Tedarikçi Çağrışım Ünlü", yazildi: new Date().toISOString(), kalemler: [{ model: "T-1", adet: 12, fiyat: 18.9, mense: "IT" }] };
-    const j = await uploadFile("siparis.json", new Blob([JSON.stringify(sample)], { type: "application/json" }), "application/json", parent);
-    const r = await drive(API + "/files/" + encodeURIComponent(j.id) + "?alt=media");
-    const back = await r.json();
-    const same = JSON.stringify(back) === JSON.stringify(sample);
-    pill("s4", same ? "ok" : "crit", same ? "Tamam" : "Uyuşmuyor");
-    log(same ? "VERİ ADIMI BAŞARILI: yazılan ve okunan aynı (Türkçe karakterler dahil)." : "VERİ ADIMI HATA: okunan veri yazılandan farklı.", back);
-  } catch (e) { pill("s4", "crit", "Başarısız"); log("VERİ ADIMI HATA: " + e.message); }
-});
-$("btnCopy").addEventListener("click", async () => {
-  const txt = $("log").textContent;
-  try { await navigator.clipboard.writeText(txt); $("btnCopy").textContent = "Kopyalandı"; }
-  catch (e) { const r = document.createRange(); r.selectNodeContents($("log")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("btnCopy").textContent = "Seçildi, elle kopyalayın"; }
-  setTimeout(() => { $("btnCopy").textContent = "Günlüğü kopyala"; }, 2500);
-});
-
-/* ---- Başlangıç ---- */
-$("envMode").textContent = standalone ? "Ana ekran uygulaması (bağımsız pencere)" : "Tarayıcı sekmesi";
-$("envOrigin").textContent = location.origin;
-$("envRedirect").textContent = REDIRECT;
-$("envClient").innerHTML = configured ? '<span class="pill ok">Tanımlı</span>' : '<span class="pill crit">Eksik: config.js dosyasını doldurun</span>';
-log("Ortam: " + (standalone ? "ana ekran uygulaması" : "tarayıcı sekmesi"));
-log("Tarayıcı: " + navigator.userAgent);
-log("Adres: " + REDIRECT);
-if (!configured) { $("btnPopup").disabled = true; $("btnRedirect").disabled = true; log("İstemci kimliği tanımlı değil. KURULUM.md dosyasındaki B bölümünü tamamlayın."); }
-if (!handleRedirectReturn()) {
-  try {
-    const saved = JSON.parse(load("ithalat.tok") || "null");
-    if (saved && saved.token && saved.tokenUntil > Date.now() + 60000) { token = saved.token; tokenUntil = saved.tokenUntil; pill("s1", "ok", "Giriş yapıldı"); for (const id of ["btnFolder", "file", "btnData", "btnOut"]) $(id).disabled = false; log("Önceki giriş hâlâ geçerli."); }
-  } catch (e) {}
+/* ---------- Başlangıç ---------- */
+async function start(){
+  log("Ortam: "+(standalone?"ana ekran uygulaması":"tarayıcı sekmesi")+", sürüm "+APP_VERSION);
+  log("Tarayıcı: "+navigator.userAgent);
+  const back=handleRedirectReturn();
+  const cached=await idb.get("orders");
+  if(Array.isArray(cached)&&cached.length){S.orders=cached;sortOrders();S.loaded=true}
+  let saved=null;try{saved=JSON.parse(ss.get("ithalat.tok")||"null")}catch(e){}
+  if(back&&back.token){route();setToken(back.token,back.expiresIn,"yönlendirme");return}
+  if(back&&back.error)S.loginErr=back.error;
+  if(saved&&saved.token&&saved.tokenUntil>Date.now()+60000){token=saved.token;tokenUntil=saved.tokenUntil;S.auth="in";log("Önceki oturum hâlâ geçerli.");route();boot();return}
+  S.auth=S.loaded?"expired":"out";
+  route();
 }
+window.addEventListener("hashchange",route);
+window.addEventListener("online",()=>{if(S.auth==="in"){log("Bağlantı geri geldi.");pushAllDirty()}});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible"||S.auth!=="in")return;
+  if(tokenUntil&&Date.now()>tokenUntil-30000){expire();return}
+  if(Date.now()-(syncDown.last||0)>60000){syncDown.last=Date.now();syncDown().then(()=>pushAllDirty())}
+});
+start();
+
 </script>
 </body>
 </html>
