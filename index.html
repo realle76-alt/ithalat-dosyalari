@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>İthalat Dosyaları: bağlantı denemesi</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="İthalat">
+<meta name="theme-color" content="#243b8f">
+<style>
+:root{--bg:#eceff3;--surface:#fff;--ink:#151a25;--muted:#586173;--line:#d0d6df;--accent:#243b8f;--ok:#1b6e37;--ok-soft:#dcf1e3;--crit:#ac241c;--crit-soft:#fbe2e0;--warn:#7c5200;--warn-soft:#fbeecb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,"Segoe UI",system-ui,sans-serif}
+main{max-width:680px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:16px;margin:0 0 8px}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:44px;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn[disabled]{opacity:.45;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12.5px;font-weight:600;background:var(--line);color:var(--muted)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
+code,pre{font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
+code{background:var(--bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+pre{background:#10131a;color:#e8ebf2;border-radius:8px;padding:12px;overflow:auto;max-height:340px;white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0}
+dt{color:var(--muted)} dd{margin:0;overflow-wrap:anywhere}
+.step{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+input[type=file]{max-width:100%}
+img.thumb{max-width:120px;border-radius:6px;border:1px solid var(--line);margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Bağlantı denemesi</h1>
+  <p class="muted">Bu sayfa asıl uygulama değil. Tek amacı Google girişi ile Drive'a yazmanın bilgisayarda, iPhone Safari'de ve ana ekrana eklenmiş hâlde çalışıp çalışmadığını görmek.</p>
+
+  <div class="card" id="cfgCard">
+    <h2>Ortam</h2>
+    <dl>
+      <dt>Çalışma biçimi</dt><dd id="envMode"></dd>
+      <dt>JavaScript kaynağı</dt><dd><code id="envOrigin"></code></dd>
+      <dt>Yönlendirme URI</dt><dd><code id="envRedirect"></code></dd>
+      <dt>İstemci kimliği</dt><dd id="envClient"></dd>
+    </dl>
+    <p class="muted" style="margin:10px 0 0">İlk iki adres Google Cloud'daki istemci ayarlarına harfi harfine bu hâliyle girilmelidir.</p>
+  </div>
+
+  <div class="card">
+    <div class="step"><h2>1. Google ile giriş</h2><span class="pill" id="s1">Bekliyor</span></div>
+    <p class="muted">İki yöntemi de deneyin. iPhone'da ana ekran uygulamasında hangisinin çalıştığını öğrenmemiz gerekiyor.</p>
+    <div class="row">
+      <button class="btn primary" id="btnPopup">Giriş: açılır pencere</button>
+      <button class="btn" id="btnRedirect">Giriş: yönlendirme</button>
+      <button class="btn" id="btnOut" disabled>Çıkış</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="step"><h2>2. Klasör aç</h2><span class="pill" id="s2">Bekliyor</span></div>
+    <p class="muted">Drive'da kök arşiv klasörünü ve içinde bir deneme siparişi klasörünü oluşturur. Varsa yenisini açmaz.</p>
+    <button class="btn" id="btnFolder" disabled>Klasörleri oluştur</button>
+  </div>
+
+  <div class="card">
+    <div class="step"><h2>3. Fotoğraf ya da PDF yükle</h2><span class="pill" id="s3">Bekliyor</span></div>
+    <p class="muted">iPhone'da kamerayı ya da galeriyi açmalı.</p>
+    <input type="file" id="file" accept="image/*,application/pdf" disabled>
+    <div id="upOut"></div>
+  </div>
+
+  <div class="card">
+    <div class="step"><h2>4. Veri dosyası yaz ve oku</h2><span class="pill" id="s4">Bekliyor</span></div>
+    <p class="muted">Sipariş bilgilerinin tutulacağı küçük dosyayı yazar, sonra geri okuyup aynı olduğunu doğrular.</p>
+    <button class="btn" id="btnData" disabled>Yaz ve oku</button>
+  </div>
+
+  <div class="card">
+    <div class="step"><h2>Günlük</h2><button class="btn" id="btnCopy">Günlüğü kopyala</button></div>
+    <p class="muted">Her denemeden sonra bu günlüğü kopyalayıp gönderin.</p>
+    <pre id="log" aria-live="polite"></pre>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script>
+"use strict";
+const CFG = window.ITHALAT_CONFIG || {};
+const SCOPE = "https://www.googleapis.com/auth/drive.file";
+const API = "https://www.googleapis.com/drive/v3";
+const UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+const TEST_ORDER = "DENEME-001 Bağlantı testi";
+const REDIRECT = location.origin + location.pathname;
+const $ = id => document.getElementById(id);
+const standalone = !!navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+const configured = !!CFG.clientId && CFG.clientId.indexOf("BURAYA") === -1;
+let token = null, tokenUntil = 0, orderFolderId = null, gisClient = null;
+
+function log(msg, data) {
+  const t = new Date().toLocaleTimeString("tr-TR");
+  let line = "[" + t + "] " + msg;
+  if (data !== undefined) line += " " + (typeof data === "string" ? data : JSON.stringify(data));
+  $("log").textContent += line + "\n";
+  $("log").scrollTop = $("log").scrollHeight;
+}
+function pill(id, state, text) { const p = $(id); p.className = "pill" + (state ? " " + state : ""); p.textContent = text; }
+function store(k, v) { try { if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+
+function setSignedIn(tok, expiresIn, how) {
+  token = tok; tokenUntil = Date.now() + (Number(expiresIn) || 3600) * 1000;
+  store("ithalat.tok", JSON.stringify({ token, tokenUntil }));
+  pill("s1", "ok", "Giriş yapıldı");
+  log("GİRİŞ BAŞARILI, yöntem: " + how + ", süre (sn): " + expiresIn);
+  for (const id of ["btnFolder", "file", "btnData", "btnOut"]) $(id).disabled = false;
+  whoAmI();
+}
+function setSignedOut() {
+  token = null; store("ithalat.tok", null);
+  pill("s1", "", "Bekliyor");
+  for (const id of ["btnFolder", "file", "btnData", "btnOut"]) $(id).disabled = true;
+}
+
+async function drive(url, opts) {
+  if (!token) throw new Error("Önce giriş yapın.");
+  const o = Object.assign({}, opts || {});
+  o.headers = Object.assign({ Authorization: "Bearer " + token }, o.headers || {});
+  const r = await fetch(url, o);
+  if (!r.ok) {
+    let detail = ""; try { const j = await r.json(); detail = (j.error && j.error.message) || JSON.stringify(j); } catch (e) {}
+    if (r.status === 401) setSignedOut();
+    throw new Error("HTTP " + r.status + (detail ? ": " + detail : ""));
+  }
+  return r;
+}
+const q = s => String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function whoAmI() {
+  try {
+    const r = await drive(API + "/about?fields=user(emailAddress)");
+    const j = await r.json(); log("Hesap: " + (j.user && j.user.emailAddress));
+  } catch (e) { log("Hesap bilgisi alınamadı (deneme için sorun değil): " + e.message); }
+}
+async function findOrCreateFolder(name, parentId) {
+  const query = "name='" + q(name) + "' and mimeType='" + FOLDER_MIME + "' and trashed=false and '" + parentId + "' in parents";
+  const r = await drive(API + "/files?spaces=drive&fields=files(id,name)&q=" + encodeURIComponent(query));
+  const j = await r.json();
+  if (j.files && j.files.length) { log("Klasör zaten var: " + name); return j.files[0].id; }
+  const c = await drive(API + "/files?fields=id,name", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] })
+  });
+  const cj = await c.json(); log("Klasör oluşturuldu: " + name); return cj.id;
+}
+async function ensureOrderFolder() {
+  if (orderFolderId) return orderFolderId;
+  const root = await findOrCreateFolder(CFG.rootFolderName || "İthalat Arşivi", "root");
+  const year = await findOrCreateFolder(String(new Date().getFullYear()), root);
+  orderFolderId = await findOrCreateFolder(TEST_ORDER, year);
+  return orderFolderId;
+}
+function multipart(meta, blob, type) {
+  const b = "ithalat" + Math.random().toString(36).slice(2);
+  const body = new Blob([
+    "--" + b + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n", JSON.stringify(meta),
+    "\r\n--" + b + "\r\nContent-Type: " + type + "\r\n\r\n", blob, "\r\n--" + b + "--"
+  ]);
+  return { body, headers: { "Content-Type": "multipart/related; boundary=" + b } };
+}
+async function uploadFile(name, blob, type, parentId) {
+  const m = multipart({ name, parents: [parentId] }, blob, type || "application/octet-stream");
+  const r = await drive(UPLOAD + "?uploadType=multipart&fields=id,name,size,mimeType,webViewLink", { method: "POST", headers: m.headers, body: m.body });
+  return r.json();
+}
+
+/* ---- Giriş yöntemleri ---- */
+function loginRedirect() {
+  if (!configured) return log("HATA: config.js içinde istemci kimliği yok.");
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  store("ithalat.state", state);
+  const p = new URLSearchParams({ client_id: CFG.clientId, redirect_uri: REDIRECT, response_type: "token", scope: SCOPE, state, include_granted_scopes: "true" });
+  log("Yönlendirme ile giriş başlatılıyor.");
+  location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + p.toString());
+}
+function loadGis() {
+  return new Promise((res, rej) => {
+    if (window.google && google.accounts && google.accounts.oauth2) return res();
+    const s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true;
+    s.onload = () => res(); s.onerror = () => rej(new Error("Google giriş kitaplığı yüklenemedi."));
+    document.head.appendChild(s);
+  });
+}
+async function loginPopup() {
+  if (!configured) return log("HATA: config.js içinde istemci kimliği yok.");
+  try {
+    await loadGis();
+    if (!gisClient) gisClient = google.accounts.oauth2.initTokenClient({
+      client_id: CFG.clientId, scope: SCOPE,
+      callback: resp => {
+        if (resp && resp.access_token) setSignedIn(resp.access_token, resp.expires_in, "açılır pencere");
+        else { pill("s1", "crit", "Başarısız"); log("Açılır pencere girişi reddedildi:", resp); }
+      },
+      error_callback: err => { pill("s1", "crit", "Başarısız"); log("Açılır pencere hatası:", { type: err && err.type, message: err && err.message }); }
+    });
+    log("Açılır pencere ile giriş başlatılıyor.");
+    gisClient.requestAccessToken();
+  } catch (e) { pill("s1", "crit", "Başarısız"); log("HATA: " + e.message); }
+}
+function handleRedirectReturn() {
+  if (!location.hash || location.hash.length < 2) return false;
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (!h.has("access_token") && !h.has("error")) return false;
+  history.replaceState(null, "", location.pathname + location.search);
+  if (h.has("error")) { pill("s1", "crit", "Başarısız"); log("Yönlendirme girişi hata döndü: " + h.get("error")); return true; }
+  const expected = load("ithalat.state");
+  store("ithalat.state", null);
+  if (!expected || expected !== h.get("state")) {
+    pill("s1", "crit", "Başarısız");
+    log("UYARI: Dönüşte güvenlik değeri (state) eşleşmedi. Bu, girişin başka bir pencerede ya da tarayıcıda tamamlandığını gösterir. Belirteç kullanılmadı.");
+    return true;
+  }
+  setSignedIn(h.get("access_token"), h.get("expires_in"), "yönlendirme");
+  return true;
+}
+
+/* ---- Adımlar ---- */
+$("btnPopup").addEventListener("click", loginPopup);
+$("btnRedirect").addEventListener("click", loginRedirect);
+$("btnOut").addEventListener("click", () => { setSignedOut(); orderFolderId = null; log("Çıkış yapıldı (bu cihazdaki belirteç silindi)."); });
+$("btnFolder").addEventListener("click", async () => {
+  pill("s2", "warn", "Çalışıyor");
+  try { const id = await ensureOrderFolder(); pill("s2", "ok", "Tamam"); log("KLASÖR ADIMI BAŞARILI, kimlik: " + id); }
+  catch (e) { pill("s2", "crit", "Başarısız"); log("KLASÖR ADIMI HATA: " + e.message); }
+});
+$("file").addEventListener("change", async ev => {
+  const f = ev.target.files && ev.target.files[0]; if (!f) return;
+  pill("s3", "warn", "Yükleniyor");
+  log("Dosya seçildi: " + f.name + ", tür: " + (f.type || "bilinmiyor") + ", boyut: " + Math.round(f.size / 1024) + " KB");
+  try {
+    const parent = await ensureOrderFolder();
+    const t0 = Date.now();
+    const j = await uploadFile(f.name, f, f.type, parent);
+    pill("s3", "ok", "Tamam");
+    log("YÜKLEME BAŞARILI (" + (Date.now() - t0) + " ms):", j);
+    const out = $("upOut"); out.textContent = "";
+    if (j.webViewLink && /^https:\/\//.test(j.webViewLink)) {
+      const a = document.createElement("a"); a.href = j.webViewLink; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Drive'da aç";
+      out.appendChild(a);
+    }
+    if (/^image\//.test(f.type)) { const im = document.createElement("img"); im.className = "thumb"; im.alt = "Yüklenen fotoğraf"; im.src = URL.createObjectURL(f); out.appendChild(document.createElement("br")); out.appendChild(im); }
+  } catch (e) { pill("s3", "crit", "Başarısız"); log("YÜKLEME HATA: " + e.message); }
+  ev.target.value = "";
+});
+$("btnData").addEventListener("click", async () => {
+  pill("s4", "warn", "Çalışıyor");
+  try {
+    const parent = await ensureOrderFolder();
+    const sample = { no: "DENEME-001", tedarikci: "Örnek Tedarikçi Çağrışım Ünlü", yazildi: new Date().toISOString(), kalemler: [{ model: "T-1", adet: 12, fiyat: 18.9, mense: "IT" }] };
+    const j = await uploadFile("siparis.json", new Blob([JSON.stringify(sample)], { type: "application/json" }), "application/json", parent);
+    const r = await drive(API + "/files/" + encodeURIComponent(j.id) + "?alt=media");
+    const back = await r.json();
+    const same = JSON.stringify(back) === JSON.stringify(sample);
+    pill("s4", same ? "ok" : "crit", same ? "Tamam" : "Uyuşmuyor");
+    log(same ? "VERİ ADIMI BAŞARILI: yazılan ve okunan aynı (Türkçe karakterler dahil)." : "VERİ ADIMI HATA: okunan veri yazılandan farklı.", back);
+  } catch (e) { pill("s4", "crit", "Başarısız"); log("VERİ ADIMI HATA: " + e.message); }
+});
+$("btnCopy").addEventListener("click", async () => {
+  const txt = $("log").textContent;
+  try { await navigator.clipboard.writeText(txt); $("btnCopy").textContent = "Kopyalandı"; }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($("log")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("btnCopy").textContent = "Seçildi, elle kopyalayın"; }
+  setTimeout(() => { $("btnCopy").textContent = "Günlüğü kopyala"; }, 2500);
+});
+
+/* ---- Başlangıç ---- */
+$("envMode").textContent = standalone ? "Ana ekran uygulaması (bağımsız pencere)" : "Tarayıcı sekmesi";
+$("envOrigin").textContent = location.origin;
+$("envRedirect").textContent = REDIRECT;
+$("envClient").innerHTML = configured ? '<span class="pill ok">Tanımlı</span>' : '<span class="pill crit">Eksik: config.js dosyasını doldurun</span>';
+log("Ortam: " + (standalone ? "ana ekran uygulaması" : "tarayıcı sekmesi"));
+log("Tarayıcı: " + navigator.userAgent);
+log("Adres: " + REDIRECT);
+if (!configured) { $("btnPopup").disabled = true; $("btnRedirect").disabled = true; log("İstemci kimliği tanımlı değil. KURULUM.md dosyasındaki B bölümünü tamamlayın."); }
+if (!handleRedirectReturn()) {
+  try {
+    const saved = JSON.parse(load("ithalat.tok") || "null");
+    if (saved && saved.token && saved.tokenUntil > Date.now() + 60000) { token = saved.token; tokenUntil = saved.tokenUntil; pill("s1", "ok", "Giriş yapıldı"); for (const id of ["btnFolder", "file", "btnData", "btnOut"]) $(id).disabled = false; log("Önceki giriş hâlâ geçerli."); }
+  } catch (e) {}
+}
+</script>
+</body>
+</html>
