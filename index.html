@@ -1215,7 +1215,7 @@ function tabCompare(o){
 
 /* ---- Maliyet ---- */
 const nf0=new Intl.NumberFormat("tr-TR",{maximumFractionDigits:0});
-const EXP_PRESETS=[["Gümrük vergileri ve fonlar (dekont)","TL","CN"],["Navlun","EUR","all"],["Nakliyat sigortası","TL","all"],["Müşavir hizmet bedeli","TL","all"],["Ardiye","TL","all"],["Antrepo","TL","all"],["İTKİB ve belge masrafları","TL","all"],["İç nakliye","TL","all"]];
+const EXP_PRESETS=[["İlave gümrük vergisi","TL","CN"],["İthalat KDV'si","TL","all"],["Diğer gümrük giderleri (damga, depo, tahmil, banka, İTKİB)","TL","all"],["Navlun","EUR","all"],["Nakliyat sigortası","TL","all"],["Müşavir hizmet bedeli","TL","all"],["Ardiye","TL","all"],["Antrepo","TL","all"],["İTKİB ve belge masrafları","TL","all"],["İç nakliye","TL","all"]];
 function tabCost(o){
   const r=computeCost(o);const c=r.c;
   let h='<div class="card"><div class="card-h"><h2>Hesap ayarları</h2><span class="small muted">Fiyatlama tablonuzdaki katsayılar</span></div><div class="fields">'
@@ -1227,7 +1227,7 @@ function tabCost(o){
     +'</div><p class="small muted" style="margin:10px 0 0">Birim maliyet sipariş fiyatından hesaplanır: fiyat × komisyon × ek pay × kur, üstüne kaleme düşen masraf eklenir. Toptan fiyat = birim maliyet × kâr katsayısı.</p></div>';
   const exp=c.exp||[];
   h+='<div class="card"><div class="card-h"><h2>Masraflar</h2><button class="btn sm primary" data-act="add-exp">Masraf ekle</button></div>';
-  if(!exp.length)h+='<div class="empty">Henüz masraf yok. Vergi dekontu, navlun, sigorta, müşavir, ardiye ve İTKİB tutarlarını ekleyin. Çin menşeli kalemlere gelen ilave vergiyi "Yalnız Çin menşeli" kapsamıyla girin.</div>';
+  if(!exp.length)h+='<div class="empty">Henüz masraf yok. Vergi dekontunu beyannamedeki dökümüne göre üç satır olarak girin: ilave gümrük vergisi ("Yalnız Çin menşeli" kapsamıyla), KDV ve diğer gümrük giderleri. Ardından navlun, sigorta, müşavir, ardiye ve antrepo tutarlarını ekleyin.</div>';
   else h+='<div class="scroll"><table><thead><tr><th>Masraf</th><th>Kapsam</th><th>Dağıtım</th><th class="num">Tutar</th><th class="num">TL</th><th></th></tr></thead><tbody>'+exp.map(x=>'<tr><td>'+esc(x.l)+'</td><td>'+esc(SCOPES[x.scope||"all"])+'</td><td>'+(x.by==="adet"?"Adet başına":"Euro tutarına göre")+'</td><td class="num mono">'+nf.format(Number(x.amt)||0)+' '+esc(x.cur||"TL")+'</td><td class="num mono">'+nf.format((Number(x.amt)||0)*(x.cur==="EUR"?r.kur:1))+'</td><td class="num"><button class="btn sm ghost" data-act="edit-exp" data-id="'+esc(x.id)+'">Düzenle</button></td></tr>').join("")+'</tbody><tfoot><tr><td colspan="4">Toplam masraf</td><td class="num mono">'+nf.format(r.total)+'</td><td></td></tr></tfoot></table></div>';
   if(exp.some(x=>x.cur==="EUR")&&!r.kur)h+='<div class="banner warn" style="margin-top:10px">Euro ile girilen masrafları TL\'ye çevirmek için kuru yazın.</div>';
   if(r.unalloc.length)h+='<div class="banner warn" style="margin-top:10px">'+esc(r.unalloc.map(x=>x.l).join(", "))+' dağıtılamadı: kapsamına uyan kalem yok.</div>';
