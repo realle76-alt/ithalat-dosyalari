@@ -234,14 +234,14 @@ label.f.wide{grid-column:1/-1}
 <script src="config.js?v=3"></script>
 <script>
 "use strict";
-const APP_VERSION="0.5.0";
+const APP_VERSION="0.5.1";
 /* ---------- Sabitler ---------- */
 const STAGES=[
   {k:"siparis",l:"Sipariş verildi",wait:"Taslak"},
   {k:"proforma",l:"Proforma alındı",wait:"Proforma bekleniyor"},
   {k:"odeme",l:"Ödeme yapıldı",wait:"Ödeme bekleniyor"},
   {k:"yukleme",l:"Yüklendi",wait:"Yükleme bekleniyor"},
-  {k:"varis",l:{IT:"Gümrüğe geldi",CN:"Limana geldi"},wait:"Yolda"},
+  {k:"varis",l:"Gümrüğe geldi",wait:"Yolda"},
   {k:"tescil",l:"Beyanname tescil edildi",wait:"Gümrükte, beyanname bekleniyor",customs:true},
   {k:"vergi",l:"Vergiler ödendi",wait:"Gümrükte, vergi ödemesi bekleniyor",customs:true},
   {k:"depo",l:"Depoya girdi",wait:"Teslim bekleniyor"}
@@ -255,11 +255,13 @@ function docTypesFor(o){
     {k:"fatura",l:"Ticari fatura",req:true},
     {k:"ceki",l:"Çeki listesi",req:true}
   ];
+  t.push({k:"tasima",l:"Taşıma belgesi (CMR / konşimento)",req:true});
   if(o.shipFrom==="CN"){
-    t.push({k:"tasima",l:"Konşimento",req:true},{k:"ordino",l:"Ordino",req:true},{k:"mense",l:"Menşe şahadetnamesi",req:true},{k:"sigorta",l:"Sigorta poliçesi",req:false});
+    t.push({k:"mense",l:"Menşe şahadetnamesi",req:true},{k:"ordino",l:"Ordino",req:false});
   }else{
-    t.push({k:"tasima",l:"CMR",req:true},{k:"atr",l:"A.TR dolaşım belgesi",req:true},{k:"mense",l:"Menşe beyanı / şahadetnamesi",req:cnItem,hint:cnItem?"Çin menşeli kalem olduğu için":"Müşavir isterse"});
+    t.push({k:"atr",l:"A.TR dolaşım belgesi",req:true},{k:"mense",l:"Menşe beyanı / şahadetnamesi",req:cnItem,hint:cnItem?"Çin menşeli kalem olduğu için":"Müşavir isterse"});
   }
+  t.push({k:"sigorta",l:"Sigorta poliçesi",req:false});
   t.push(
     {k:"beyanname",l:"Gümrük beyannamesi",req:true},
     {k:"makbuz",l:"Vergi tahakkuk ve makbuzu",req:true},
@@ -862,7 +864,7 @@ function viewOrder(o){
   const tabs=[["kalemler","Kalemler",(o.items||[]).length],["fotograflar","Fotoğraflar",(o.photos||[]).length],["gumruk","Gümrük",p.idx+"/"+STAGES.length],["belgeler","Belgeler",(reqN-miss.length)+"/"+reqN],["karsilastirma","Karşılaştırma",""],["maliyet","Maliyet",((o.cost||{}).exp||[]).length||""]];
   let h='<a class="back" href="#siparisler">← Siparişler</a>'+notices();
   h+='<div class="ohead '+(o.shipFrom==="CN"?"cn":"it")+'"><div class="ohead-top"><div><div class="no">'+esc(o.no)+'</div><h1>'+esc(o.supplier)+'</h1><div class="chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px"><span class="chip '+(p.done?"ok":"")+'">'+esc(p.status)+'</span>'+chipsFor(o,p)+'</div></div><div style="display:flex;gap:6px"><button class="btn sm" data-act="edit-order">Düzenle</button><button class="btn sm ghost danger" data-act="del-order">Sil</button></div></div>';
-  h+='<div class="facts"><span>Sipariş tarihi <b>'+esc(fmtDate(o.orderDate))+'</b></span><span>Taşıma <b>'+esc(o.transport||"Belirtilmedi")+'</b></span><span>Toplam <b class="mono">'+esc(money(orderTotal(o),o.currency))+'</b></span><span>Adet <b class="mono">'+nfi.format(orderQty(o))+'</b></span></div></div>';
+  h+='<div class="facts"><span>Sipariş tarihi <b>'+esc(fmtDate(o.orderDate))+'</b></span><span>Toplam <b class="mono">'+esc(money(orderTotal(o),o.currency))+'</b></span><span>Adet <b class="mono">'+nfi.format(orderQty(o))+'</b></span></div></div>';
   if(mixedOrigin(o))h+='<div class="banner warn"><b>Müşavire sorun:</b> Bu sipariş İtalya\'dan geliyor ama Çin menşeli kalem içeriyor. A.TR olsa bile bu kalemlerde ek vergi ve menşe belgesi gündeme gelebilir. Karar müşavirindir, uygulama yalnızca işaretler.</div>';
   h+='<div class="tabs" role="tablist">'+tabs.map(([k,l,n])=>'<button role="tab" data-act="tab" data-v="'+k+'" aria-selected="'+(S.tab===k)+'">'+l+(n!==""?'<span class="n">'+esc(n)+'</span>':"")+'</button>').join("")+'</div>';
   h+=({kalemler:tabItems,fotograflar:tabPhotos,gumruk:tabCustoms,belgeler:tabDocs,karsilastirma:tabCompare,maliyet:tabCost}[S.tab]||tabItems)(o,p);
@@ -896,7 +898,7 @@ function tabPhotos(o){
 }
 function tabCustoms(o,p){
   const s=o.stages||{};const c=o.customs||{};
-  let h='<div class="card"><div class="card-h"><h2>Aşamalar</h2><span class="small muted">'+(o.shipFrom==="CN"?"Çin, denizyolu akışı":"İtalya, karayolu akışı")+'</span></div><ol class="timeline">';
+  let h='<div class="card"><div class="card-h"><h2>Aşamalar</h2></div><ol class="timeline">';
   STAGES.forEach((st,i)=>{const d=s[st.k];const cls=d?"done":i===p.idx?"now":"pending";
     h+='<li class="'+cls+'"><span class="dot"></span><div><div class="lab">'+esc(stageLabel(st,o))+'</div>'+(i===p.idx&&p.wait!=null?'<div class="small muted">'+p.wait+' gündür bekliyor</div>':"")+'</div><div class="ctl"><input type="date" id="st-'+st.k+'" data-stage="'+st.k+'" value="'+esc(d||"")+'" aria-label="'+esc(stageLabel(st,o))+' tarihi">'+(d?"":'<button class="btn sm" data-act="stage-today" data-v="'+st.k+'">Bugün</button>')+'</div></li>'});
   h+='</ol></div>';
@@ -904,7 +906,7 @@ function tabCustoms(o,p){
   h+='<div class="card"><div class="card-h"><h2>Gümrük bilgileri</h2><span class="small muted">Müşavirden geldikçe elle girilir</span></div><div class="fields">'
     +'<label class="f">Beyanname tescil no<input type="text" class="mono" id="c-beyannameNo" data-c="beyannameNo" value="'+esc(c.beyannameNo||"")+'"></label>'
     +'<label class="f">Gümrük müşaviri<input type="text" id="c-musavir" data-c="musavir" value="'+esc(c.musavir||"")+'"></label>'
-    +'<label class="f">'+(o.shipFrom==="CN"?"Konteyner / konşimento no":"Araç plakası / CMR no")+'<input type="text" id="c-arac" data-c="arac" value="'+esc(c.arac||"")+'"></label>'
+    +'<label class="f">'+"Araç / konteyner no"+'<input type="text" id="c-arac" data-c="arac" value="'+esc(c.arac||"")+'"></label>'
     +'<label class="f wide">Not<textarea id="c-not" data-c="not">'+esc(c.not||"")+'</textarea></label></div></div>';
   return h;
 }
@@ -953,13 +955,12 @@ function nextNo(ship,date){
   return pre+String(n+1).padStart(3,"0");
 }
 function orderDialog(o){
-  const isNew=!o;const d=o||{shipFrom:"IT",currency:"EUR",orderDate:today(),transport:"Karayolu (TIR)",supplier:"",no:""};
+  const isNew=!o;const d=o||{shipFrom:"IT",currency:"EUR",orderDate:today(),supplier:"",no:""};
   dialog('<h2>'+(isNew?"Yeni sipariş":"Siparişi düzenle")+'</h2><div class="fields">'
     +'<label class="f wide">Tedarikçi<input type="text" name="supplier" id="d-supplier" required value="'+esc(d.supplier)+'"></label>'
     +'<label class="f">Sevk ülkesi<select name="shipFrom" id="d-ship"><option value="IT"'+(d.shipFrom==="IT"?" selected":"")+'>İtalya</option><option value="CN"'+(d.shipFrom==="CN"?" selected":"")+'>Çin</option></select></label>'
     +'<label class="f">Para birimi<select name="currency" id="d-cur">'+["EUR","USD","TRY"].map(c=>'<option'+(d.currency===c?" selected":"")+'>'+c+'</option>').join("")+'</select></label>'
     +'<label class="f">Sipariş tarihi<input type="date" name="orderDate" id="d-date" value="'+esc(d.orderDate)+'"></label>'
-    +'<label class="f">Taşıma<select name="transport" id="d-tr">'+["Karayolu (TIR)","Denizyolu (konteyner)","Havayolu","Kargo / kurye"].map(c=>'<option'+(d.transport===c?" selected":"")+'>'+c+'</option>').join("")+'</select></label>'
     +'<label class="f wide">Sipariş no<input type="text" class="mono" name="no" id="d-no" value="'+esc(d.no)+'" placeholder="Boş bırakırsanız otomatik verilir"></label>'
     +'</div><p class="small muted" style="margin:10px 0 0">Sevk ülkesi malın geldiği yerdir. Üretildiği yeri (menşe) her kalemde ayrı seçersiniz.</p>'
     +'<div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">'+(isNew?"Dosyayı aç":"Kaydet")+'</button></div>',
@@ -967,10 +968,10 @@ function orderDialog(o){
     if(!v.supplier.trim()){toast("Tedarikçi adını yazın.");return false}
     if(isNew){
       const id=uid();
-      const n={id,no:v.no.trim()||nextNo(v.shipFrom,v.orderDate),supplier:v.supplier.trim(),shipFrom:v.shipFrom,currency:v.currency,transport:v.transport,orderDate:v.orderDate||today(),stages:{siparis:v.orderDate||today()},customs:{},items:[],photos:[],docs:[],createdAt:new Date().toISOString()};
+      const n={id,no:v.no.trim()||nextNo(v.shipFrom,v.orderDate),supplier:v.supplier.trim(),shipFrom:v.shipFrom,currency:v.currency,orderDate:v.orderDate||today(),stages:{siparis:v.orderDate||today()},customs:{},items:[],photos:[],docs:[],createdAt:new Date().toISOString()};
       S.sel=id;S.tab="kalemler";remember();saveOrder(n);location.hash="#dosya";
     }else{
-      Object.assign(o,{supplier:v.supplier.trim(),shipFrom:v.shipFrom,currency:v.currency,transport:v.transport,orderDate:v.orderDate,no:v.no.trim()||o.no});saveOrder(o);
+      Object.assign(o,{supplier:v.supplier.trim(),shipFrom:v.shipFrom,currency:v.currency,orderDate:v.orderDate,no:v.no.trim()||o.no});saveOrder(o);
     }
   });
   if(isNew){const ship=$("#d-ship"),tr=$("#d-tr"),cur=$("#d-cur");ship.addEventListener("change",()=>{if(ship.value==="CN"){tr.value="Denizyolu (konteyner)";cur.value="USD"}else{tr.value="Karayolu (TIR)";cur.value="EUR"}})}
