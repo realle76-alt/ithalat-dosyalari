@@ -234,7 +234,7 @@ label.f.wide{grid-column:1/-1}
 <script src="config.js?v=3"></script>
 <script>
 "use strict";
-const APP_VERSION="0.3.0";
+const APP_VERSION="0.4.0";
 /* ---------- Sabitler ---------- */
 const STAGES=[
   {k:"siparis",l:"Sipariş verildi",wait:"Taslak"},
@@ -688,7 +688,116 @@ function linesFromPdfItems(items){
   return rows.map(r=>r.parts.sort((a,b)=>a.x-b.x).map(p=>p.str).join(" "));
 }
 const normModel=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
-if(typeof module!=="undefined")module.exports={linesFromPdfItems,parseNum,parseItemLine,parseInvoice,parseLabel,normModel,findOrigin};
+/* Model kodu belgeler arasında farklı yazılabiliyor (SJ1818-13 / 1818-13, 16123 / U16123BYRYH, B254 / B0254#).
+   Önce birebir, sonra biri diğerini içeriyorsa, en son sayısal çekirdek aynıysa eşleştirilir. Aday birden çoksa adedi tutan seçilir. */
+function codeMatcher(orderItems){
+  const keys=new Map();
+  for(const it of orderItems||[]){const k=normModel(it.model);if(k)keys.set(k,(keys.get(k)||0)+(Number(it.qty)||0))}
+  const core=s=>{const m=s.match(/\d+/g);if(!m)return "";return String(Number(m.reduce((x,y)=>y.length>x.length?y:x)))};
+  return it=>{
+    const a=normModel(it&&it.model);if(!a)return null;
+    if(keys.has(a))return {k:a,exact:true};
+    const tiers=[[],[]];const ca=core(a);
+    for(const k of keys.keys()){
+      const sh=a.length<k.length?a:k,lg=a.length<k.length?k:a;
+      const at=sh.length>=4?lg.indexOf(sh):-1;
+      if(at>-1&&!/\d/.test(lg[at-1]||"")&&!/\d/.test(lg[at+sh.length]||""))tiers[0].push(k);
+      else if(ca.length>=3&&ca===core(k))tiers[1].push(k);
+    }
+    for(const t of tiers){
+      if(!t.length)continue;
+      const q=Number(it.qty)||0;
+      const pick=t.find(k=>keys.get(k)===q)||t.slice().sort((x,y)=>Math.abs(x.length-a.length)-Math.abs(y.length-a.length))[0];
+      return {k:pick,exact:false};
+    }
+    return null;
+  };
+}
+
+/* ---------- Excel tabloları: sipariş listesi ve fattura ---------- */
+const isSheetFile=(name,ct)=>/\.(xlsx|xlsm|xls|ods|csv)$/i.test(name||"")||/spreadsheet|ms-excel|text\/csv/i.test(ct||"");
+const hnorm=v=>String(v==null?"":v).toUpperCase().replace(/\s+/g," ").trim();
+const cellStr=v=>v==null?"":String(v).trim();
+const cellNum=v=>typeof v==="number"?v:(v==null||v===""?NaN:parseNum(v));
+const rowText=row=>(row||[]).filter(v=>v!=null&&v!=="").map(String).join(" ");
+function findHeader(rows,cols,need){
+  for(let r=0;r<Math.min(rows.length,20);r++){
+    const map={};
+    (rows[r]||[]).forEach((v,c)=>{const h=hnorm(v);if(!h)return;for(const k in cols)if(map[k]==null&&cols[k].test(h)){map[k]=c;break}});
+    if(need.every(k=>map[k]!=null))return {row:r,map};
+  }
+  return null;
+}
+const ORDER_COLS={
+  company:/^(COMPANY|F[İI]RMA|TEDAR[İI]K[ÇC][İI]|SUPPLIER)$/,
+  box:/^(BOX|BOX NO|BOX NUMBERS?|KOL[İI]|KOL[İI] NO)$/,
+  model:/^(ARTICOLO|ART\.? ?NO|ARTICLE|MODEL|MODEL KODU)$/,
+  desc:/^(DESCRIPTION|DESCRIZIONE|TANIM|A[ÇC]IKLAMA)$/,
+  qty:/^(QTY|ADET|Q\.? ?T[AÀ]'?|QUANTITY)$/,
+  price:/^(PRICE|F[İI]YAT|B[İI]R[İI]M F[İI]YAT|PREZZO|UNIT PRICE)$/
+};
+/* Sipariş listesi ve fiyatlama tablosu: firma ve koli yalnızca firmanın ilk satırında yazılı, alttakilere taşınır. */
+function parseOrderSheet(rows){
+  const hd=findHeader(rows||[],ORDER_COLS,["model","qty","price"]);
+  if(!hd)return null;
+  const m=hd.map;const items=[];let company="",box="";
+  for(let r=hd.row+1;r<rows.length;r++){
+    const row=rows[r]||[];const g=k=>m[k]==null?null:row[m[k]];
+    const co=cellStr(g("company"));if(co){company=co.replace(/\s+/g," ");box=""}
+    const bx=cellStr(g("box"));if(bx)box=bx.replace(/^\.+/,"");
+    const qty=cellNum(g("qty")),price=cellNum(g("price"));
+    const model=cellStr(g("model")),desc=cellStr(g("desc"));
+    if(!(qty>0)||!(model||desc))continue;
+    items.push({company,box,model,desc,qty,price:price>0?price:0});
+  }
+  return {items};
+}
+const INV_COLS={
+  qty:/^(Q\.? ?T[AÀ]'?|QTY|QUANTITY|ADET|MIKTAR)$/,
+  desc:/^(DESCRIZIONE|DESCRIPTION|TANIM|MAL TANIMI)$/,
+  tr:/[ÜU]R[ÜU]N TANIM/,
+  price:/^(PREZZO UNITARIO|PREZZO|UNIT PRICE|PRICE|B[İI]R[İI]M F[İI]YAT)$/,
+  total:/^(TOTALE|TOTAL|AMOUNT|IMPORTO|TUTAR)$/
+};
+const IT_MONTHS={gennaio:1,febbraio:2,marzo:3,aprile:4,maggio:5,giugno:6,luglio:7,agosto:8,settembre:9,ottobre:10,novembre:11,dicembre:12};
+/* Fattura tablosu: "MADE IN CHINA / MADE IN ITALY" ara başlıkları altındaki satırların menşeini belirler. */
+function parseInvoiceSheet(rows){
+  const hd=findHeader(rows||[],INV_COLS,["qty","desc","price"]);
+  if(!hd)return null;
+  const m=hd.map;let no="",date="",total=null,origin="",currency="";
+  for(let r=0;r<hd.row;r++){
+    const t=rowText(rows[r]);
+    if(/made\s+in\s+china/i.test(t))origin="CN";else if(/made\s+in\s+italy/i.test(t))origin="IT";
+    if(!no){const mn=/\b(?:fattura|invoice|proforma|fatura)\b\s*(?:n[°º.]?|nr\.?|no\.?)?\s*[:.]?\s*([A-Z0-9][\w\-\/]*)/i.exec(t);if(mn&&/\d/.test(mn[1]))no=mn[1]}
+    if(!date){
+      const mi=/(\d{1,2})\s+([a-z]+)\s+(\d{4})/i.exec(t);const mo=mi&&IT_MONTHS[mi[2].toLowerCase()];
+      if(mo)date=mi[3]+"-"+String(mo).padStart(2,"0")+"-"+String(+mi[1]).padStart(2,"0");
+      else{const dm=/\b(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})\b/.exec(t);if(dm&&+dm[2]>=1&&+dm[2]<=12)date=dm[3]+"-"+dm[2].padStart(2,"0")+"-"+dm[1].padStart(2,"0")}
+    }
+  }
+  const items=[];
+  for(let r=hd.row+1;r<rows.length;r++){
+    const row=rows[r]||[];const t=rowText(row);
+    if(/€|\bEUR\b|\beuro\b/i.test(t))currency="EUR";
+    if(/TOT\.?\s*FATTURA|TOTALE\s+(?:FATTURA|DOCUMENTO)|GRAND\s+TOTAL/i.test(t)){
+      const vs=row.map(cellNum).filter(v=>isFinite(v)&&v>0);if(vs.length)total=Math.max(...vs);break;
+    }
+    const qty=cellNum(row[m.qty]),price=cellNum(row[m.price]);const d=cellStr(row[m.desc]);
+    if(!(qty>0)){
+      if(/made\s+in\s+china|\bcina\b/i.test(t))origin="CN";
+      else if(/made\s+in\s+italy|\bitalia\b/i.test(t))origin="IT";
+      continue;
+    }
+    if(!(price>0)||!d)continue;
+    const am=/^ART(?:ICOLO)?\.?\s*(\S+)\s*(.*)$/i.exec(d);
+    const model=am?am[1].replace(/[.,;:]+$/,""):"";const desc=(am?am[2]:d).trim();
+    const tv=m.total!=null?cellNum(row[m.total]):NaN;
+    items.push({model,desc,qty,price,amount:tv>0?tv:Math.round(qty*price*100)/100,origin,trDesc:m.tr!=null?cellStr(row[m.tr]):""});
+  }
+  const sum=Math.round(items.reduce((s,i)=>s+i.amount,0)*100)/100;
+  return {no,date,currency,total,sum,items,lineCount:rows.length};
+}
+if(typeof module!=="undefined")module.exports={linesFromPdfItems,parseNum,parseItemLine,parseInvoice,parseLabel,normModel,findOrigin,codeMatcher,parseOrderSheet,parseInvoiceSheet,isSheetFile};
 
 /* ---------- Görünümler ---------- */
 function chipsFor(o,p){
@@ -739,12 +848,13 @@ function originSplit(o){
 function tabItems(o){
   const g=originSplit(o);
   let h='<div class="split">'+Object.keys(g).map(k=>'<div class="card"><span class="chip '+(k==="CN"?"cn":k==="IT"?"it":"")+'">'+esc(COUNTRY[k]||k)+' menşeli</span><div style="margin-top:8px"><b>'+esc(money(g[k].sum,o.currency))+'</b></div><div class="small muted">'+g[k].n+' kalem · '+nfi.format(g[k].qty)+' adet</div></div>').join("")+'</div>';
-  h+='<div class="card"><div class="card-h"><h2>Sipariş kalemleri</h2><button class="btn sm primary" data-act="add-item">Kalem ekle</button></div>';
-  if(!(o.items||[]).length)return h+'<div class="empty">Henüz kalem yok. Showroom\'da seçtiğiniz her modeli ayrı kalem olarak ekleyin.</div></div>';
-  h+='<div class="scroll"><table class="items"><thead><tr><th>Model</th><th>Tanım</th><th>Menşe</th><th class="num">Adet</th><th class="num">Birim fiyat</th><th class="num">Tutar</th><th></th></tr></thead><tbody>';
+  h+='<div class="card"><div class="card-h"><h2>Sipariş kalemleri</h2><div style="display:flex;flex-wrap:wrap;gap:6px"><label class="btn sm filebtn">Excel\'den aktar<input type="file" id="itemsXlsx" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" aria-label="Sipariş listesini Excel\'den aktar"></label><button class="btn sm primary" data-act="add-item">Kalem ekle</button></div></div>';
+  if(!(o.items||[]).length)return h+'<div class="empty">Henüz kalem yok. Showroom\'da seçtiğiniz her modeli ayrı kalem olarak ekleyin ya da sipariş listesini ve fiyatlama tablosunu Excel\'den aktarın.</div></div>';
+  const hasCo=o.items.some(i=>i.company);
+  h+='<div class="scroll"><table class="items"><thead><tr>'+(hasCo?'<th>Firma</th>':'')+'<th>Model</th><th>Tanım</th><th>Menşe</th><th class="num">Adet</th><th class="num">Birim fiyat</th><th class="num">Tutar</th><th></th></tr></thead><tbody>';
   for(const i of o.items){const ph=(o.photos||[]).filter(x=>x.itemId===i.id).length;
-    h+='<tr><td class="mono">'+esc(i.model)+'</td><td>'+esc(i.desc)+'<div class="small muted">'+esc([i.color,i.sizes].filter(Boolean).join(" · "))+(ph?' · '+ph+' fotoğraf':"")+(i.gtip?' · GTİP '+esc(i.gtip):"")+'</div></td><td data-l="Menşe"><span class="chip '+(i.origin==="CN"?"cn":i.origin==="IT"?"it":"")+'">'+esc(COUNTRY[i.origin]||i.origin||"Belirsiz")+'</span></td><td class="num mono" data-l="Adet">'+nfi.format(i.qty||0)+'</td><td class="num mono" data-l="Birim fiyat">'+nf.format(i.price||0)+'</td><td class="num mono" data-l="Tutar">'+nf.format(lineTotal(i))+'</td><td class="num"><button class="btn sm ghost" data-act="edit-item" data-id="'+esc(i.id)+'">Düzenle</button></td></tr>'}
-  h+='</tbody><tfoot><tr><td colspan="3">Toplam</td><td class="num mono" data-l="Adet">'+nfi.format(orderQty(o))+'</td><td></td><td class="num mono" data-l="Tutar">'+esc(money(orderTotal(o),o.currency))+'</td><td></td></tr></tfoot></table></div></div>';
+    h+='<tr>'+(hasCo?'<td data-l="Firma">'+esc(i.company||"")+(i.box?'<div class="small muted">Koli '+esc(i.box)+'</div>':"")+'</td>':"")+'<td class="mono">'+esc(i.model)+'</td><td>'+esc(i.desc)+'<div class="small muted">'+esc([i.trDesc,i.color,i.sizes].filter(Boolean).join(" · "))+(ph?' · '+ph+' fotoğraf':"")+(i.gtip?' · GTİP '+esc(i.gtip):"")+'</div></td><td data-l="Menşe"><span class="chip '+(i.origin==="CN"?"cn":i.origin==="IT"?"it":"")+'">'+esc(COUNTRY[i.origin]||i.origin||"Belirsiz")+'</span></td><td class="num mono" data-l="Adet">'+nfi.format(i.qty||0)+'</td><td class="num mono" data-l="Birim fiyat">'+nf.format(i.price||0)+'</td><td class="num mono" data-l="Tutar">'+nf.format(lineTotal(i))+'</td><td class="num"><button class="btn sm ghost" data-act="edit-item" data-id="'+esc(i.id)+'">Düzenle</button></td></tr>'}
+  h+='</tbody><tfoot><tr><td colspan="'+(hasCo?4:3)+'">Toplam</td><td class="num mono" data-l="Adet">'+nfi.format(orderQty(o))+'</td><td></td><td class="num mono" data-l="Tutar">'+esc(money(orderTotal(o),o.currency))+'</td><td></td></tr></tfoot></table></div></div>';
   return h;
 }
 function tabPhotos(o){
@@ -773,13 +883,13 @@ function tabCustoms(o,p){
 }
 function tabDocs(o){
   const types=docTypesFor(o);const docs=o.docs||[];
-  let h='<div class="card"><div class="card-h"><h2>Dosya belgeleri</h2><span class="small muted">PDF ya da fotoğraf, Drive\'a yüklenir</span></div>';
+  let h='<div class="card"><div class="card-h"><h2>Dosya belgeleri</h2><span class="small muted">PDF, Excel ya da fotoğraf, Drive\'a yüklenir</span></div>';
   if(S.busy)h+='<div class="banner info">Yükleniyor, sayfayı kapatmayın.</div>';
   h+='<ul class="doclist">';
   for(const t of types){const mine=docs.map((d,n)=>({d,n})).filter(x=>x.d.type===t.k);
     h+='<li><div style="min-width:0;flex:1 1 220px"><div><b style="font-weight:500">'+esc(t.l)+'</b> '+(mine.length?'<span class="chip ok">Var</span>':t.req?'<span class="chip warn">Eksik</span>':'<span class="chip">İsteğe bağlı</span>')+'</div>'+(t.hint?'<div class="small muted">'+esc(t.hint)+'</div>':"")
       +'<div class="files">'+mine.map(x=>'<span><a href="'+esc(linkOf(x.d))+'" target="_blank" rel="noopener">'+esc(x.d.name||"Dosya")+'</a> <span class="muted">· '+esc(fmtDate(x.d.at))+'</span> '+readBadge(t.k,x)+'<button class="btn sm ghost danger" data-act="del-doc" data-n="'+x.n+'">Sil</button></span>').join("")+'</div></div>'
-      +'<label class="btn sm filebtn">Yükle<input type="file" data-doc="'+t.k+'" accept="application/pdf,image/*" multiple aria-label="'+esc(t.l)+' yükle"></label></li>'}
+      +'<label class="btn sm filebtn">Yükle<input type="file" data-doc="'+t.k+'" accept="application/pdf,image/*,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" multiple aria-label="'+esc(t.l)+' yükle"></label></li>'}
   return h+'</ul></div>';
 }
 function viewArchive(){
@@ -839,11 +949,14 @@ function orderDialog(o){
   if(isNew){const ship=$("#d-ship"),tr=$("#d-tr"),cur=$("#d-cur");ship.addEventListener("change",()=>{if(ship.value==="CN"){tr.value="Denizyolu (konteyner)";cur.value="USD"}else{tr.value="Karayolu (TIR)";cur.value="EUR"}})}
 }
 function itemDialog(o,item){
-  const isNew=!item;const d=item||{model:"",desc:"",color:"",sizes:"",qty:"",price:"",origin:o.shipFrom==="CN"?"CN":"IT",gtip:""};
+  const isNew=!item;const d=item||{model:"",desc:"",color:"",sizes:"",qty:"",price:"",origin:o.shipFrom==="CN"?"CN":"IT",gtip:"",company:"",box:"",trDesc:""};
   dialog('<h2>'+(isNew?"Kalem ekle":"Kalemi düzenle")+'</h2><div class="fields">'
     +'<label class="f">Model kodu<input type="text" class="mono" name="model" id="i-model" value="'+esc(d.model)+'"></label>'
     +'<label class="f">Menşe (üretildiği ülke)<select name="origin" id="i-origin">'+Object.keys(COUNTRY).map(k=>'<option value="'+k+'"'+(d.origin===k?" selected":"")+'>'+COUNTRY[k]+'</option>').join("")+'</select></label>'
     +'<label class="f wide">Tanım<input type="text" name="desc" id="i-desc" required value="'+esc(d.desc)+'"></label>'
+    +'<label class="f">Firma (satıcı)<input type="text" name="company" id="i-company" value="'+esc(d.company||"")+'"></label>'
+    +'<label class="f">Koli no<input type="text" name="box" id="i-box" value="'+esc(d.box||"")+'"></label>'
+    +'<label class="f wide">Türkçe tanım (gümrük için)<input type="text" name="trDesc" id="i-trDesc" value="'+esc(d.trDesc||"")+'" placeholder="Örn. MONT DOKUMA POLYESTER"></label>'
     +'<label class="f">Renk<input type="text" name="color" id="i-color" value="'+esc(d.color)+'"></label>'
     +'<label class="f">Beden dağılımı<input type="text" name="sizes" id="i-sizes" value="'+esc(d.sizes)+'" placeholder="S-M-L 2-3-2"></label>'
     +'<label class="f">Adet<input type="number" name="qty" id="i-qty" min="0" step="1" inputmode="numeric" value="'+esc(d.qty)+'"></label>'
@@ -852,7 +965,7 @@ function itemDialog(o,item){
     +'</div><div class="acts">'+(isNew?"":'<button type="button" class="btn ghost danger" data-act="del-item" data-id="'+esc(d.id)+'" style="margin-right:auto">Kalemi sil</button>')+'<button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div>',
   v=>{
     if(!v.desc.trim()&&!v.model.trim()){toast("Model kodu ya da tanım yazın.");return false}
-    const rec={model:v.model.trim(),desc:v.desc.trim(),color:v.color.trim(),sizes:v.sizes.trim(),qty:Number(v.qty)||0,price:Number(String(v.price).replace(",","."))||0,origin:v.origin,gtip:v.gtip.trim()};
+    const rec={model:v.model.trim(),desc:v.desc.trim(),color:v.color.trim(),sizes:v.sizes.trim(),qty:Number(v.qty)||0,price:Number(String(v.price).replace(",","."))||0,origin:v.origin,gtip:v.gtip.trim(),company:v.company.trim(),box:v.box.trim(),trDesc:v.trDesc.trim()};
     o.items=o.items||[];
     if(isNew)o.items.push(Object.assign({id:uid()},rec));else Object.assign(item,rec);
     saveOrder(o);
@@ -863,8 +976,14 @@ function itemDialog(o,item){
 const LIBS={
   tess:"https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js",
   pdf:"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
-  pdfWorker:"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
+  pdfWorker:"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+  xlsx:"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
 };
+async function readSheets(buf){
+  await loadScript(LIBS.xlsx);
+  const wb=XLSX.read(buf,{type:"array"});
+  return wb.SheetNames.map(n=>({name:n,rows:XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null,blankrows:false})}));
+}
 const READABLE={proforma:1,fatura:1};
 const scriptP={};
 function loadScript(src){
@@ -929,8 +1048,17 @@ async function readDocAction(o,n){
   try{
     const t0=Date.now();
     const blob=await driveBlob(d.id);
-    const res=await readDocText(blob,d.ct);
-    const parsed=parseInvoice(res.text);
+    let res,parsed;
+    if(isSheetFile(d.orig||d.name,d.ct)){
+      setStatus("Excel tablosu açılıyor.");
+      const sheets=await readSheets(await blob.arrayBuffer());
+      for(const sh of sheets){const p=parseInvoiceSheet(sh.rows);if(p&&p.items.length){parsed=p;break}}
+      parsed=parsed||{no:"",date:"",currency:"",total:null,sum:0,items:[]};
+      res={text:sheets.map(sh=>sh.rows.map(rowText).join("\n")).join("\n\n"),method:"Excel tablosu",conf:null,pages:1};
+    }else{
+      res=await readDocText(blob,d.ct);
+      parsed=parseInvoice(res.text);
+    }
     log("Belge okundu ("+(Date.now()-t0)+" ms): "+d.name+", yöntem: "+res.method+(res.conf!=null?", güven %"+res.conf:"")+", bulunan kalem: "+parsed.items.length);
     reviewDialog(o,d,parsed,res);
   }catch(e){closeLayer();log("BELGE OKUMA HATASI: "+e.message);toast("Belge okunamadı. "+e.message)}
@@ -949,17 +1077,50 @@ function reviewDialog(o,d,p,res){
   h+='<div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button>'+(p.items.length?'<button class="btn primary">Karşılaştırmaya kaydet</button>':"")+'</div>';
   dialog(h,v=>{
     const items=[];
-    p.items.forEach((it,i)=>{if(!v["on"+i])return;items.push({model:String(v["m"+i]||"").trim(),desc:String(v["d"+i]||"").trim(),qty:Number(v["q"+i])||0,price:Number(v["p"+i])||0,origin:v["o"+i]||""})});
+    p.items.forEach((it,i)=>{if(!v["on"+i])return;const x={model:String(v["m"+i]||"").trim(),desc:String(v["d"+i]||"").trim(),qty:Number(v["q"+i])||0,price:Number(v["p"+i])||0,origin:v["o"+i]||""};if(it.trDesc)x.trDesc=it.trDesc;items.push(x)});
     if(!items.length){toast("En az bir kalem seçin.");return false}
     const target=(o.docs||[]).find(x=>x.id===d.id)||d;
     target.read={no:String(v.no||"").trim(),date:v.date||"",total:v.total===""?null:Number(v.total),currency:cur,method:res.method,at:today(),items};
-    let added=0;
+    let added=0,named=0;
+    const match=codeMatcher(o.items||[]);
+    /* Ürün tanımları sütunu olan tablodan gelen Türkçe tanım, eşleşen sipariş kalemine yazılır. */
+    for(const it of items){if(!it.trDesc)continue;const r=match(it);if(!r)continue;
+      for(const oi of o.items||[])if(normModel(oi.model)===r.k&&oi.trDesc!==it.trDesc){oi.trDesc=it.trDesc;named++}}
     if(v.addItems){
-      const have=new Set((o.items||[]).map(i=>normModel(i.model)).filter(Boolean));
-      for(const it of items){const k=normModel(it.model);if(k&&have.has(k))continue;(o.items=o.items||[]).push({id:uid(),model:it.model,desc:it.desc,color:"",sizes:"",qty:it.qty,price:it.price,origin:it.origin||(o.shipFrom==="CN"?"CN":"IT"),gtip:""});if(k)have.add(k);added++}
+      for(const it of items){if(match(it))continue;(o.items=o.items||[]).push({id:uid(),model:it.model,desc:it.desc,color:"",sizes:"",qty:it.qty,price:it.price,origin:it.origin||(o.shipFrom==="CN"?"CN":"IT"),gtip:"",company:"",box:"",trDesc:it.trDesc||""});added++}
     }
     S.tab="karsilastirma";remember();saveOrder(o);
-    toast(items.length+" kalem kaydedildi"+(added?", "+added+" tanesi sipariş kalemlerine eklendi":"")+".");
+    toast(items.length+" kalem kaydedildi"+(added?", "+added+" tanesi sipariş kalemlerine eklendi":"")+(named?", "+named+" kaleme Türkçe tanım yazıldı":"")+".");
+  });
+  $("#layer form").classList.add("wide");
+}
+/* ---- Sipariş listesini Excel'den aktarma ---- */
+async function importItemsAction(o,file){
+  busyLayer("Excel tablosu okunuyor");
+  try{
+    const sheets=await readSheets(await file.arrayBuffer());
+    let p=null;for(const sh of sheets){const r=parseOrderSheet(sh.rows);if(r&&r.items.length){p=r;break}}
+    log("Excel aktarma: "+file.name+", bulunan kalem: "+(p?p.items.length:0));
+    if(!p){closeLayer();toast("Bu tabloda kalem satırı bulunamadı. Başlık satırında model (ARTICOLO / ART NO), adet (QTY / ADET) ve fiyat (PRICE) sütunları olmalı.");return}
+    importDialog(o,file.name,p.items);
+  }catch(e){closeLayer();log("EXCEL OKUMA HATASI: "+e.message);toast("Tablo okunamadı. "+e.message)}
+}
+function importDialog(o,fname,rows){
+  const guess=/china|cina|[çc][iİı]n\b/i.test(fname)?"CN":/ital/i.test(fname)?"IT":(o.shipFrom==="CN"?"CN":"IT");
+  const qty=rows.reduce((s,r)=>s+r.qty,0),sum=rows.reduce((s,r)=>s+r.qty*r.price,0);
+  const cos=new Set(rows.map(r=>r.company).filter(Boolean));
+  let h='<h2>Excel\'den kalem aktar</h2><p class="small muted" style="margin:0 0 10px">'+esc(fname)+'</p>';
+  h+='<div class="banner info">'+rows.length+' kalem'+(cos.size?', '+cos.size+' firma':'')+', toplam <b class="mono">'+nfi.format(qty)+'</b> adet, <b class="mono">'+esc(money(sum,o.currency))+'</b>.</div>';
+  h+='<div class="fields"><label class="f">Bu kalemlerin menşei<select name="origin" id="x-origin">'+Object.keys(COUNTRY).map(k=>'<option value="'+k+'"'+(k===guess?" selected":"")+'>'+COUNTRY[k]+'</option>').join("")+'</select></label></div>';
+  if((o.items||[]).length)h+='<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px"><input type="checkbox" name="replace" id="x-replace" style="margin-top:3px"><span>Mevcut '+o.items.length+' kalemi silip yerine bunları koy. İşaretlemezseniz yeni kalemler mevcutların sonuna eklenir.</span></label>';
+  h+='<div class="scroll" style="max-height:320px;margin-top:12px"><table><thead><tr><th>Firma</th><th>Koli</th><th>Model</th><th>Tanım</th><th class="num">Adet</th><th class="num">Fiyat</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(r.company)+'</td><td class="mono">'+esc(r.box)+'</td><td class="mono">'+esc(r.model)+'</td><td>'+esc(r.desc)+'</td><td class="num mono">'+nfi.format(r.qty)+'</td><td class="num mono">'+nf.format(r.price)+'</td></tr>').join("")+'</tbody></table></div>';
+  h+='<div class="acts"><button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">'+rows.length+' kalemi aktar</button></div>';
+  dialog(h,v=>{
+    if(v.replace){const ids=new Set((o.items||[]).map(i=>i.id));(o.photos||[]).forEach(ph=>{if(ids.has(ph.itemId))ph.itemId=""});o.items=[]}
+    o.items=o.items||[];
+    for(const r of rows)o.items.push({id:uid(),model:r.model,desc:r.desc,color:"",sizes:"",qty:r.qty,price:r.price,origin:v.origin,gtip:"",company:r.company,box:r.box,trDesc:""});
+    S.tab="kalemler";remember();saveOrder(o);
+    toast(rows.length+" kalem aktarıldı.");
   });
   $("#layer form").classList.add("wide");
 }
@@ -978,8 +1139,13 @@ function readItems(o,typeKey){
 function tabCompare(o){
   const pf=readItems(o,"proforma"),ft=readItems(o,"fatura");
   const keyOf=it=>normModel(it.model)||"~"+String(it.desc||"").toLocaleLowerCase("tr").replace(/\s+/g," ").trim();
+  const match=codeMatcher(o.items||[]);
   const rows=new Map();
-  const put=(src,it)=>{const k=keyOf(it);let r=rows.get(k);if(!r){r={model:it.model,desc:it.desc,s:null,p:null,f:null};rows.set(k,r)}
+  const put=(src,it)=>{
+    let k=keyOf(it),alias="";
+    if(src!=="s"){const m=match(it);if(m){k=m.k;if(!m.exact)alias=it.model}}
+    let r=rows.get(k);if(!r){r={model:it.model,desc:it.desc,company:"",alias:new Set(),s:null,p:null,f:null};rows.set(k,r)}
+    if(alias)r.alias.add(alias);if(src==="s"&&it.company&&!r.company)r.company=it.company;
     if(!r[src])r[src]={qty:0,sum:0};r[src].qty+=Number(it.qty)||0;r[src].sum+=(Number(it.qty)||0)*(Number(it.price)||0);if(!r.desc)r.desc=it.desc;if(!r.model)r.model=it.model};
   (o.items||[]).forEach(it=>put("s",it));pf.items.forEach(it=>put("p",it));ft.items.forEach(it=>put("f",it));
   const price=c=>c&&c.qty?c.sum/c.qty:0;
@@ -989,8 +1155,8 @@ function tabCompare(o){
     if(Math.abs(price(a)-price(b))>0.005)out.push(["warn","Fiyat: "+an+" "+nf.format(price(a))+", "+bn+" "+nf.format(price(b))]);return out};
   let h="";
   if(!pf.docs.length&&!ft.docs.length)h+='<div class="banner info">Karşılaştırma için önce Belgeler sekmesinden proforma ya da ticari faturayı yükleyin, sonra dosyanın yanındaki <b>Kalemleri oku</b> düğmesine basın.</div>';
-  let problems=0;
-  let body="";
+  let problems=0,qtyProblems=0,priceOnly=0;
+  const out=[];
   for(const r of rows.values()){
     const flags=[];
     if((pf.docs.length||ft.docs.length)&&!r.s)flags.push(["crit","Siparişte yok"]);
@@ -1001,11 +1167,16 @@ function tabCompare(o){
     if(!r.s)flags.push(...diff(r.p,r.f,"proforma","fatura"));
     const any=pf.docs.length||ft.docs.length;
     if(flags.length)problems++;
-    body+='<tr><td><span class="mono">'+esc(r.model||"")+'</span><div class="small muted">'+esc(r.desc||"")+'</div></td><td class="num">'+cell(r.s)+'</td><td class="num">'+(pf.docs.length?cell(r.p):'<span class="muted">okunmadı</span>')+'</td><td class="num">'+(ft.docs.length?cell(r.f):'<span class="muted">okunmadı</span>')+'</td><td>'+(flags.length?flags.map(f=>'<span class="chip '+f[0]+'" style="white-space:normal;margin:1px 0">'+esc(f[1])+'</span>').join(" "):any?'<span class="chip ok">Uyumlu</span>':"")+'</td></tr>';
+    const sev=flags.some(f=>f[0]==="crit")?2:flags.some(f=>/^Adet/.test(f[1]))?1:flags.length?0.5:0;
+    if(sev>=1)qtyProblems++;else if(sev)priceOnly++;
+    const note=r.alias.size?'<div class="small muted">Belgede '+esc([...r.alias].join(", "))+' olarak yazılmış</div>':"";
+    out.push([sev,'<tr><td><span class="mono">'+esc(r.model||"")+'</span><div class="small muted">'+esc([r.company,r.desc].filter(Boolean).join(" · "))+'</div></td><td class="num">'+cell(r.s)+'</td><td class="num">'+(pf.docs.length?cell(r.p):'<span class="muted">okunmadı</span>')+'</td><td class="num">'+(ft.docs.length?cell(r.f):'<span class="muted">okunmadı</span>')+'</td><td>'+(flags.length?flags.map(f=>'<span class="chip '+f[0]+'" style="white-space:normal;margin:1px 0">'+esc(f[1])+'</span>').join(" "):any?'<span class="chip ok">Uyumlu</span>':"")+note+'</td></tr>']);
   }
   const sumOf=src=>{let s=0;for(const r of rows.values())if(r[src])s+=r[src].sum;return s};
   const tot=(src,info)=>info.docs.length?'<span class="mono">'+nf.format(sumOf(src))+'</span>'+(info.total!=null&&Math.abs(info.total-sumOf(src))>0.02?'<div class="small" style="color:var(--warn)">belgede '+nf.format(info.total)+'</div>':""):'<span class="muted">okunmadı</span>';
-  if(pf.docs.length||ft.docs.length)h+='<div class="banner '+(problems?"warn":"info")+'">'+(problems?'<b>'+problems+' kalemde fark var.</b> Aşağıda işaretli satırlara bakın.':"Okunan belgeler siparişle uyumlu.")+'</div>';
+  /* Eksik kalem ve adet farkları en üstte; yalnızca fiyatı farklı olanlar arkadan gelir. */
+  const body=out.map((x,i)=>[x[0],i,x[1]]).sort((a,b)=>b[0]-a[0]||a[1]-b[1]).map(x=>x[2]).join("");
+  if(pf.docs.length||ft.docs.length)h+='<div class="banner '+(problems?"warn":"info")+'">'+(problems?(qtyProblems?'<b>'+qtyProblems+' kalemde eksik kalem ya da adet farkı var.</b> Bunlar listenin başında. ':'<b>Adet farkı yok.</b> ')+(priceOnly?priceOnly+' kalemde yalnızca birim fiyat farklı.':""):"Okunan belgeler siparişle uyumlu.")+'</div>';
   h+='<div class="card"><div class="card-h"><h2>Kalem karşılaştırması ('+esc(o.currency)+')</h2><span class="small muted">adet × birim fiyat</span></div>';
   if(!rows.size)h+='<div class="empty">Karşılaştırılacak kalem yok.</div></div>';
   else h+='<div class="scroll"><table><thead><tr><th>Model</th><th class="num">Sipariş</th><th class="num">Proforma</th><th class="num">Ticari fatura</th><th>Durum</th></tr></thead><tbody>'+body+'</tbody><tfoot><tr><td>Toplam</td><td class="num mono">'+nf.format(sumOf("s"))+'</td><td class="num">'+tot("p",pf)+'</td><td class="num">'+tot("f",ft)+'</td><td></td></tr></tfoot></table></div></div>';
@@ -1089,6 +1260,7 @@ document.addEventListener("click",e=>{
 document.addEventListener("change",e=>{
   const t=e.target;const o=getOrder(S.sel);
   if(t.id==="photoInput"){addPhotos([...t.files]);return}
+  if(t.id==="itemsXlsx"){const f=t.files&&t.files[0];t.value="";if(f&&o)importItemsAction(o,f);return}
   if(t.dataset&&t.dataset.doc){addDocs(t.dataset.doc,[...t.files]);return}
   if(!o)return;
   if(t.dataset&&t.dataset.stage){o.stages=o.stages||{};if(t.value)o.stages[t.dataset.stage]=t.value;else delete o.stages[t.dataset.stage];saveOrder(o);return}
