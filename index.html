@@ -234,7 +234,7 @@ label.f.wide{grid-column:1/-1}
 <script src="config.js?v=3"></script>
 <script>
 "use strict";
-const APP_VERSION="0.4.0";
+const APP_VERSION="0.5.0";
 /* ---------- Sabitler ---------- */
 const STAGES=[
   {k:"siparis",l:"Sipariş verildi",wait:"Taslak"},
@@ -797,7 +797,34 @@ function parseInvoiceSheet(rows){
   const sum=Math.round(items.reduce((s,i)=>s+i.amount,0)*100)/100;
   return {no,date,currency,total,sum,items,lineCount:rows.length};
 }
-if(typeof module!=="undefined")module.exports={linesFromPdfItems,parseNum,parseItemLine,parseInvoice,parseLabel,normModel,findOrigin,codeMatcher,parseOrderSheet,parseInvoiceSheet,isSheetFile};
+/* ---------- Maliyet ----------
+   Giriş maliyeti (TL/adet) = fiyat × (1+komisyon) × (1+ek pay) × kur + kaleme düşen masraf / adet.
+   Fiyat sipariş fiyatıdır (ödenen toplam). Her masraf, kapsamındaki kalemlere euro tutarı ya da adet oranında dağıtılır. */
+const COST_DEFAULTS={kur:"",kom:5,ek:5,kar:1.8,usd:""};
+const SCOPES={all:"Bütün kalemler",CN:"Yalnız Çin menşeli",IT:"Yalnız İtalya menşeli"};
+function costSettings(o){return Object.assign({},COST_DEFAULTS,o.cost||{})}
+function computeCost(o){
+  const c=costSettings(o);const kur=Number(c.kur)||0;const kom=(Number(c.kom)||0)/100,ek=(Number(c.ek)||0)/100;
+  const kar=Number(c.kar)||0,usd=Number(c.usd)||0;
+  const items=(o.items||[]).filter(i=>(Number(i.qty)||0)>0);
+  const share=new Map(items.map(i=>[i,0]));let total=0;const unalloc=[];
+  for(const x of c.exp||[]){
+    const amt=(Number(x.amt)||0)*(x.cur==="EUR"?kur:1);if(!amt)continue;total+=amt;
+    const pool=items.filter(i=>!x.scope||x.scope==="all"||i.origin===x.scope);
+    const w=i=>x.by==="adet"?(Number(i.qty)||0):lineTotal(i);
+    const W=pool.reduce((s,i)=>s+w(i),0);
+    if(!W){unalloc.push(x);continue}
+    for(const i of pool)share.set(i,share.get(i)+amt*w(i)/W);
+  }
+  const rows=items.map(i=>{
+    const q=Number(i.qty)||0,p=Number(i.price)||0;
+    const base=p*(1+kom)*(1+ek)*kur;const exp=share.get(i)/q;const unit=base+exp;
+    const ws=unit*kar;
+    return {i,q,p,base,exp,unit,ws,wsUsd:usd?ws/usd:null,line:unit*q};
+  });
+  return {c,kur,total,rows,unalloc,goods:rows.reduce((s,r)=>s+r.base*r.q,0),landed:rows.reduce((s,r)=>s+r.line,0)};
+}
+if(typeof module!=="undefined")module.exports={linesFromPdfItems,parseNum,parseItemLine,parseInvoice,parseLabel,normModel,findOrigin,codeMatcher,parseOrderSheet,parseInvoiceSheet,isSheetFile,computeCost};
 
 /* ---------- Görünümler ---------- */
 function chipsFor(o,p){
@@ -832,13 +859,13 @@ function viewList(){
 }
 function viewOrder(o){
   const p=progress(o);const miss=missingDocs(o);const types=docTypesFor(o);const reqN=types.filter(t=>t.req).length;
-  const tabs=[["kalemler","Kalemler",(o.items||[]).length],["fotograflar","Fotoğraflar",(o.photos||[]).length],["gumruk","Gümrük",p.idx+"/"+STAGES.length],["belgeler","Belgeler",(reqN-miss.length)+"/"+reqN],["karsilastirma","Karşılaştırma",""]];
+  const tabs=[["kalemler","Kalemler",(o.items||[]).length],["fotograflar","Fotoğraflar",(o.photos||[]).length],["gumruk","Gümrük",p.idx+"/"+STAGES.length],["belgeler","Belgeler",(reqN-miss.length)+"/"+reqN],["karsilastirma","Karşılaştırma",""],["maliyet","Maliyet",((o.cost||{}).exp||[]).length||""]];
   let h='<a class="back" href="#siparisler">← Siparişler</a>'+notices();
   h+='<div class="ohead '+(o.shipFrom==="CN"?"cn":"it")+'"><div class="ohead-top"><div><div class="no">'+esc(o.no)+'</div><h1>'+esc(o.supplier)+'</h1><div class="chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px"><span class="chip '+(p.done?"ok":"")+'">'+esc(p.status)+'</span>'+chipsFor(o,p)+'</div></div><div style="display:flex;gap:6px"><button class="btn sm" data-act="edit-order">Düzenle</button><button class="btn sm ghost danger" data-act="del-order">Sil</button></div></div>';
   h+='<div class="facts"><span>Sipariş tarihi <b>'+esc(fmtDate(o.orderDate))+'</b></span><span>Taşıma <b>'+esc(o.transport||"Belirtilmedi")+'</b></span><span>Toplam <b class="mono">'+esc(money(orderTotal(o),o.currency))+'</b></span><span>Adet <b class="mono">'+nfi.format(orderQty(o))+'</b></span></div></div>';
   if(mixedOrigin(o))h+='<div class="banner warn"><b>Müşavire sorun:</b> Bu sipariş İtalya\'dan geliyor ama Çin menşeli kalem içeriyor. A.TR olsa bile bu kalemlerde ek vergi ve menşe belgesi gündeme gelebilir. Karar müşavirindir, uygulama yalnızca işaretler.</div>';
   h+='<div class="tabs" role="tablist">'+tabs.map(([k,l,n])=>'<button role="tab" data-act="tab" data-v="'+k+'" aria-selected="'+(S.tab===k)+'">'+l+(n!==""?'<span class="n">'+esc(n)+'</span>':"")+'</button>').join("")+'</div>';
-  h+=({kalemler:tabItems,fotograflar:tabPhotos,gumruk:tabCustoms,belgeler:tabDocs,karsilastirma:tabCompare}[S.tab]||tabItems)(o,p);
+  h+=({kalemler:tabItems,fotograflar:tabPhotos,gumruk:tabCustoms,belgeler:tabDocs,karsilastirma:tabCompare,maliyet:tabCost}[S.tab]||tabItems)(o,p);
   return h;
 }
 function originSplit(o){
@@ -1186,6 +1213,55 @@ function tabCompare(o){
   return h;
 }
 
+/* ---- Maliyet ---- */
+const nf0=new Intl.NumberFormat("tr-TR",{maximumFractionDigits:0});
+const EXP_PRESETS=[["Gümrük vergileri ve fonlar (dekont)","TL","CN"],["Navlun","EUR","all"],["Nakliyat sigortası","TL","all"],["Müşavir hizmet bedeli","TL","all"],["Ardiye","TL","all"],["Antrepo","TL","all"],["İTKİB ve belge masrafları","TL","all"],["İç nakliye","TL","all"]];
+function tabCost(o){
+  const r=computeCost(o);const c=r.c;
+  let h='<div class="card"><div class="card-h"><h2>Hesap ayarları</h2><span class="small muted">Fiyatlama tablonuzdaki katsayılar</span></div><div class="fields">'
+    +'<label class="f">Euro kuru (TL)<input type="number" step="0.0001" inputmode="decimal" id="k-kur" data-cost="kur" value="'+esc(c.kur)+'" placeholder="Örn. 55,6103"></label>'
+    +'<label class="f">Komisyon (%)<input type="number" step="0.01" inputmode="decimal" id="k-kom" data-cost="kom" value="'+esc(c.kom)+'"></label>'
+    +'<label class="f">Ek pay / KDV (%)<input type="number" step="0.01" inputmode="decimal" id="k-ek" data-cost="ek" value="'+esc(c.ek)+'"></label>'
+    +'<label class="f">Kâr katsayısı<input type="number" step="0.01" inputmode="decimal" id="k-kar" data-cost="kar" value="'+esc(c.kar)+'"></label>'
+    +'<label class="f">Dolar kuru (TL, isteğe bağlı)<input type="number" step="0.0001" inputmode="decimal" id="k-usd" data-cost="usd" value="'+esc(c.usd)+'"></label>'
+    +'</div><p class="small muted" style="margin:10px 0 0">Birim maliyet sipariş fiyatından hesaplanır: fiyat × komisyon × ek pay × kur, üstüne kaleme düşen masraf eklenir. Toptan fiyat = birim maliyet × kâr katsayısı.</p></div>';
+  const exp=c.exp||[];
+  h+='<div class="card"><div class="card-h"><h2>Masraflar</h2><button class="btn sm primary" data-act="add-exp">Masraf ekle</button></div>';
+  if(!exp.length)h+='<div class="empty">Henüz masraf yok. Vergi dekontu, navlun, sigorta, müşavir, ardiye ve İTKİB tutarlarını ekleyin. Çin menşeli kalemlere gelen ilave vergiyi "Yalnız Çin menşeli" kapsamıyla girin.</div>';
+  else h+='<div class="scroll"><table><thead><tr><th>Masraf</th><th>Kapsam</th><th>Dağıtım</th><th class="num">Tutar</th><th class="num">TL</th><th></th></tr></thead><tbody>'+exp.map(x=>'<tr><td>'+esc(x.l)+'</td><td>'+esc(SCOPES[x.scope||"all"])+'</td><td>'+(x.by==="adet"?"Adet başına":"Euro tutarına göre")+'</td><td class="num mono">'+nf.format(Number(x.amt)||0)+' '+esc(x.cur||"TL")+'</td><td class="num mono">'+nf.format((Number(x.amt)||0)*(x.cur==="EUR"?r.kur:1))+'</td><td class="num"><button class="btn sm ghost" data-act="edit-exp" data-id="'+esc(x.id)+'">Düzenle</button></td></tr>').join("")+'</tbody><tfoot><tr><td colspan="4">Toplam masraf</td><td class="num mono">'+nf.format(r.total)+'</td><td></td></tr></tfoot></table></div>';
+  if(exp.some(x=>x.cur==="EUR")&&!r.kur)h+='<div class="banner warn" style="margin-top:10px">Euro ile girilen masrafları TL\'ye çevirmek için kuru yazın.</div>';
+  if(r.unalloc.length)h+='<div class="banner warn" style="margin-top:10px">'+esc(r.unalloc.map(x=>x.l).join(", "))+' dağıtılamadı: kapsamına uyan kalem yok.</div>';
+  h+='</div>';
+  if(!r.rows.length)return h+'<div class="card empty">Maliyet tablosu için önce sipariş kalemlerini girin ya da Excel\'den aktarın.</div>';
+  if(!r.kur)return h+'<div class="card empty">Kalem başı maliyeti görmek için euro kurunu yazın.</div>';
+  const grp={};for(const x of r.rows){const k=x.i.origin||"XX";const g=grp[k]=grp[k]||{eur:0,exp:0};g.eur+=lineTotal(x.i);g.exp+=x.exp*x.q}
+  h+='<div class="split">'+Object.keys(grp).map(k=>'<div class="card"><span class="chip '+(k==="CN"?"cn":k==="IT"?"it":"")+'">'+esc(COUNTRY[k]||k)+' menşeli</span><div style="margin-top:8px"><b>'+(grp[k].eur?nf.format(grp[k].exp/grp[k].eur):"0")+' TL</b> <span class="small muted">1 euroya düşen masraf</span></div><div class="small muted">'+nf0.format(grp[k].exp)+' TL masraf · '+esc(money(grp[k].eur,o.currency))+'</div></div>').join("")
+    +'<div class="card"><span class="chip">Toplam giriş maliyeti</span><div style="margin-top:8px"><b>'+nf0.format(r.landed)+' TL</b></div><div class="small muted">Mal '+nf0.format(r.goods)+' TL · masraf '+nf0.format(r.total)+' TL</div></div></div>';
+  const hasCo=r.rows.some(x=>x.i.company);
+  h+='<div class="card"><div class="card-h"><h2>Kalem başı maliyet</h2><span class="small muted">TL, adet başına</span></div><div class="scroll"><table class="items"><thead><tr>'+(hasCo?'<th>Firma</th>':'')+'<th>Model</th><th class="num">Adet</th><th class="num">Fiyat ('+esc(o.currency)+')</th><th class="num">Mal</th><th class="num">Masraf</th><th class="num">Giriş maliyeti</th><th class="num">Toptan TL</th>'+(r.c.usd?'<th class="num">Toptan USD</th>':'')+'</tr></thead><tbody>'
+    +r.rows.map(x=>'<tr>'+(hasCo?'<td data-l="Firma">'+esc(x.i.company||"")+'</td>':'')+'<td><span class="mono">'+esc(x.i.model)+'</span><div class="small muted">'+esc(x.i.desc)+'</div></td><td class="num mono" data-l="Adet">'+nfi.format(x.q)+'</td><td class="num mono" data-l="Fiyat">'+nf.format(x.p)+'</td><td class="num mono" data-l="Mal">'+nf.format(x.base)+'</td><td class="num mono" data-l="Masraf">'+nf.format(x.exp)+'</td><td class="num mono" data-l="Giriş maliyeti"><b>'+nf.format(x.unit)+'</b></td><td class="num mono" data-l="Toptan TL">'+nf.format(x.ws)+'</td>'+(r.c.usd?'<td class="num mono" data-l="Toptan USD">'+nf.format(x.wsUsd)+'</td>':'')+'</tr>').join("")
+    +'</tbody></table></div></div>';
+  return h;
+}
+function expDialog(o,x){
+  const isNew=!x;const d=x||{l:"",amt:"",cur:"TL",scope:"all",by:"eur"};
+  const pre=isNew?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+EXP_PRESETS.map((p,i)=>'<button type="button" class="btn sm" data-act="exp-preset" data-n="'+i+'">'+esc(p[0])+'</button>').join("")+'</div>':"";
+  dialog('<h2>'+(isNew?"Masraf ekle":"Masrafı düzenle")+'</h2>'+pre+'<div class="fields">'
+    +'<label class="f wide">Masraf<input type="text" name="l" id="e-l" required value="'+esc(d.l)+'"></label>'
+    +'<label class="f">Tutar<input type="number" step="0.01" inputmode="decimal" name="amt" id="e-amt" value="'+esc(d.amt)+'"></label>'
+    +'<label class="f">Para birimi<select name="cur" id="e-cur">'+["TL","EUR"].map(k=>'<option'+(d.cur===k?" selected":"")+'>'+k+'</option>').join("")+'</select></label>'
+    +'<label class="f">Hangi kalemlere<select name="scope" id="e-scope">'+Object.keys(SCOPES).map(k=>'<option value="'+k+'"'+((d.scope||"all")===k?" selected":"")+'>'+SCOPES[k]+'</option>').join("")+'</select></label>'
+    +'<label class="f">Dağıtım<select name="by" id="e-by"><option value="eur"'+(d.by!=="adet"?" selected":"")+'>Euro tutarına göre</option><option value="adet"'+(d.by==="adet"?" selected":"")+'>Adet başına eşit</option></select></label>'
+    +'</div><div class="acts">'+(isNew?"":'<button type="button" class="btn ghost danger" data-act="del-exp" data-id="'+esc(d.id)+'" style="margin-right:auto">Masrafı sil</button>')+'<button type="button" class="btn" data-act="close">Vazgeç</button><button class="btn primary">Kaydet</button></div>',
+  v=>{
+    if(!v.l.trim()){toast("Masrafın adını yazın.");return false}
+    const rec={l:v.l.trim(),amt:Number(String(v.amt).replace(",","."))||0,cur:v.cur,scope:v.scope,by:v.by};
+    o.cost=o.cost||{};o.cost.exp=o.cost.exp||[];
+    if(isNew)o.cost.exp.push(Object.assign({id:uid()},rec));else Object.assign(x,rec);
+    saveOrder(o);
+  });
+}
+
 /* ---- Ürün etiketi ---- */
 function photoDialog(o,n){
   const a=o.photos[n];if(!a)return;
@@ -1247,6 +1323,10 @@ document.addEventListener("click",e=>{
   if(a==="edit-order"){orderDialog(o);return}
   if(a==="del-order"){confirmBox("Dosya silinsin mi?",o.no+" numaralı sipariş, fotoğrafları ve belgeleriyle birlikte Drive'da çöp kutusuna taşınır.","Dosyayı sil",()=>removeOrder(o));return}
   if(a==="add-item"){itemDialog(o,null);return}
+  if(a==="add-exp"){expDialog(o,null);return}
+  if(a==="edit-exp"){expDialog(o,((o.cost||{}).exp||[]).find(x=>x.id===t.dataset.id));return}
+  if(a==="del-exp"){o.cost.exp=(o.cost.exp||[]).filter(x=>x.id!==t.dataset.id);closeLayer();saveOrder(o);return}
+  if(a==="exp-preset"){const p=EXP_PRESETS[Number(t.dataset.n)];if(p){$("#e-l").value=p[0];$("#e-cur").value=p[1];$("#e-scope").value=p[2];$("#e-amt").focus()}return}
   if(a==="edit-item"){itemDialog(o,(o.items||[]).find(i=>i.id===t.dataset.id));return}
   if(a==="del-item"){o.items=(o.items||[]).filter(i=>i.id!==t.dataset.id);(o.photos||[]).forEach(p=>{if(p.itemId===t.dataset.id)p.itemId=""});closeLayer();saveOrder(o);return}
   if(a==="stage-today"){o.stages=o.stages||{};o.stages[t.dataset.v]=today();saveOrder(o);return}
@@ -1264,6 +1344,7 @@ document.addEventListener("change",e=>{
   if(t.dataset&&t.dataset.doc){addDocs(t.dataset.doc,[...t.files]);return}
   if(!o)return;
   if(t.dataset&&t.dataset.stage){o.stages=o.stages||{};if(t.value)o.stages[t.dataset.stage]=t.value;else delete o.stages[t.dataset.stage];saveOrder(o);return}
+  if(t.dataset&&t.dataset.cost){o.cost=o.cost||{};const v=t.value===""?"":Number(t.value);if(o.cost[t.dataset.cost]!==v){o.cost[t.dataset.cost]=v;saveOrder(o)}return}
   if(t.dataset&&t.dataset.c){o.customs=o.customs||{};if(o.customs[t.dataset.c]!==t.value){o.customs[t.dataset.c]=t.value;saveOrder(o)}return}
 });
 document.addEventListener("input",e=>{
